@@ -21,6 +21,40 @@ from core.physics import PhysicsParticleSystem
 from core.renderer import CinematicRenderer
 
 
+# =========================================================================
+#  EMA (Exponential Moving Average) Landmark Smoother
+# =========================================================================
+class LandmarkSmoother:
+    """Suavizador de tracking para eliminar el jitter de MediaPipe."""
+    def __init__(self, alpha=0.6):
+        self.alpha = alpha
+        self.history = {}
+
+    def smooth(self, current_hands_landmarks):
+        smoothed_hands = []
+        for i, hand in enumerate(current_hands_landmarks):
+            smoothed_hand = []
+            if i in self.history and len(self.history[i]) == len(hand):
+                # Filtro EMA (Promedio Móvil Exponencial)
+                for curr, prev in zip(hand, self.history[i]):
+                    curr.x = self.alpha * curr.x + (1 - self.alpha) * prev.x
+                    curr.y = self.alpha * curr.y + (1 - self.alpha) * prev.y
+                    curr.z = self.alpha * curr.z + (1 - self.alpha) * prev.z
+                    smoothed_hand.append(curr)
+            else:
+                smoothed_hand = hand
+            
+            import copy
+            self.history[i] = copy.deepcopy(smoothed_hand)
+            smoothed_hands.append(smoothed_hand)
+            
+        keys_to_remove = [k for k in self.history if k >= len(current_hands_landmarks)]
+        for k in keys_to_remove:
+            del self.history[k]
+                
+        return smoothed_hands
+
+
 # Adaptador: la nueva API retorna NormalizedLandmark objects
 # pero nuestros gestures.py esperan objetos con .landmark[i].x/.y
 # Este wrapper mantiene compatibilidad sin tocar el resto del código
@@ -66,11 +100,12 @@ class CursedVision:
             base_options=BaseOptions(model_asset_path=model_path),
             running_mode=VisionRunningMode.VIDEO,
             num_hands=2,
-            min_hand_detection_confidence=0.7,
-            min_hand_presence_confidence=0.7,
-            min_tracking_confidence=0.7,
+            min_hand_detection_confidence=0.85,
+            min_hand_presence_confidence=0.85,
+            min_tracking_confidence=0.85,
         )
         self.hand_landmarker = HandLandmarker.create_from_options(options)
+        self.smoother = LandmarkSmoother(alpha=0.65)
 
         # Para dibujar las conexiones de la mano
         self.hand_connections = mp.tasks.vision.HandLandmarksConnections.HAND_CONNECTIONS
@@ -101,10 +136,6 @@ class CursedVision:
         elif technique_id == "nue":
             cx, cy = get_centroid(hand_data["h1"], hand_data["h2"], fw, fh, offset_y=-120)
             self.effect_gen.draw_nue(frame, cx, cy)
-
-        elif technique_id == "orochi":
-            cx, cy = get_single_hand_center(hand_data["hand"], fw, fh)
-            self.effect_gen.draw_orochi(frame, cx, cy, fh)
 
         elif technique_id == "toad":
             cx, cy = get_centroid(hand_data["h1"], hand_data["h2"], fw, fh, offset_y=0)
@@ -196,10 +227,11 @@ class CursedVision:
             self.renderer.draw_background(canvas)
             cw, ch = self.renderer.W, self.renderer.H
 
-            # Convertir wrappers
+            # Convertir wrappers y suavizar landmarks
             hands_list = []
             if result.hand_landmarks:
-                for hand_lms in result.hand_landmarks:
+                smoothed_landmarks = self.smoother.smooth(result.hand_landmarks)
+                for hand_lms in smoothed_landmarks:
                     hands_list.append(_LandmarkListWrapper(hand_lms))
 
             technique_id, hand_data = detect_active_technique(hands_list)

@@ -31,16 +31,24 @@ import time
 
 def detect_divine_dogs(h1, h2):
     """
-    Divine Dog (Ken): Palmas unidas lateralmente, pulgares arriba.
-    Firma: Muñecas cercanas (< 0.3) + Índices cercanos (< 0.15).
+    Divine Dog (Ken): Palmas unidas lateralmente con dedos entrelazados, pulgares hacia arriba (Orejas).
+    Firma: Base de las palmas muy cercanas + Puntas de pulgares por encima (Y menor) de sus respectivas MCPs.
     """
     w1, w2 = landmarks_to_point(h1, 0), landmarks_to_point(h2, 0)
-    i1, i2 = landmarks_to_point(h1, 8), landmarks_to_point(h2, 8)
+    p1, p2 = landmarks_to_point(h1, 9), landmarks_to_point(h2, 9)
 
+    # Palmas/Muñecas pegadas (Sombra de perro lateral)
     dist_wrists = calculate_euclidean_distance(w1, w2)
-    dist_indices = calculate_euclidean_distance(i1, i2)
+    dist_palms = calculate_euclidean_distance(p1, p2)
 
-    return dist_wrists < 0.3 and dist_indices < 0.15
+    if dist_wrists > 0.15 or dist_palms > 0.15:
+        return False
+
+    # Pulgares hacia arriba (MediaPipe Y axis goes down, so tip Y < mcp Y)
+    thumb1_up = h1.landmark[4].y < h1.landmark[2].y
+    thumb2_up = h2.landmark[4].y < h2.landmark[2].y
+
+    return thumb1_up and thumb2_up
 
 
 def detect_nue(h1, h2):
@@ -63,25 +71,7 @@ def detect_nue(h1, h2):
     return sum(fingers1[1:]) >= 4 and sum(fingers2[1:]) >= 4
 
 
-def detect_orochi(hand):
-    """
-    Great Serpent (Orochi): Mano derecha alzada, dedos juntos, pulgar recogido.
-    Firma: Todas las puntas cercanas entre sí + pulgar no extendido.
-    Requiere 1 sola mano.
-    """
-    tips = [landmarks_to_point(hand, i) for i in [8, 12, 16, 20]]
-
-    # Verificar que las puntas están agrupadas (juntas)
-    max_dist = 0
-    for i in range(len(tips)):
-        for j in range(i + 1, len(tips)):
-            d = calculate_euclidean_distance(tips[i], tips[j])
-            if d > max_dist:
-                max_dist = d
-
-    # Dedos muy juntos y pulgar recogido
-    return max_dist < 0.08 and not is_thumb_extended(hand)
-
+# Se eliminó la técnica Great Serpent (Orochi) a petición del usuario.
 
 def detect_toad(h1, h2):
     """
@@ -142,20 +132,24 @@ def detect_rabbit_escape(h1, h2):
 
 def detect_mahoraga(h1, h2):
     """
-    Mahoraga (Eight-Handled Sword): Puntas de los dedos tocándose en círculo.
-    Firma: Los 5 pares de puntas de dedos correspondientes están muy cercanos (< 0.06).
+    Mahoraga (Eight-Handled Sword): Ambos puños cerrados, uno encima del otro.
+    Firma: Ambas manos son puños (dedos recogidos) + Muñecas muy cercanas vertical/espacialmente (< 0.25).
     """
-    tip_ids = [4, 8, 12, 16, 20]
-    close_pairs = 0
-
-    for tid in tip_ids:
-        p1 = landmarks_to_point(h1, tid)
-        p2 = landmarks_to_point(h2, tid)
-        if calculate_euclidean_distance(p1, p2) < 0.06:
-            close_pairs += 1
-
-    # Al menos 4 de 5 pares deben estar tocándose
-    return close_pairs >= 4
+    w1, w2 = landmarks_to_point(h1, 0), landmarks_to_point(h2, 0)
+    
+    # Validar puños cerrados (puntas cerca de la muñeca)
+    tips1 = [landmarks_to_point(h1, i) for i in [8, 12, 16, 20]]
+    tips2 = [landmarks_to_point(h2, i) for i in [8, 12, 16, 20]]
+    
+    is_fist_1 = all(calculate_euclidean_distance(t, w1) < 0.15 for t in tips1)
+    is_fist_2 = all(calculate_euclidean_distance(t, w2) < 0.15 for t in tips2)
+    
+    if not (is_fist_1 and is_fist_2):
+        return False
+        
+    # Validar que están cerca uno del otro (apilados)
+    dist_wrists = calculate_euclidean_distance(w1, w2)
+    return dist_wrists < 0.25
 
 
 # =============================================================================
@@ -296,31 +290,34 @@ def detect_blue(hand):
 
 def detect_red(hand):
     """
-    Red (Reversal): Solo el índice apuntando hacia adelante.
-    Firma: Índice extendido, todos los demás cerrados.
+    Red (Reversal): Solo el índice apuntando estrictamente hacia arriba.
+    Firma: Índice extendido, pulgar recogido, todos los demás cerrados. Posición vertical estricta.
     """
     fingers = get_extended_fingers(hand)
-    return fingers[1] and not fingers[0] and not fingers[2] and not fingers[3] and not fingers[4]
+    idx_up = fingers[1] and not fingers[0] and not fingers[2] and not fingers[3] and not fingers[4]
+
+    # Validar que apunte hacia ARRIBA de forma global
+    # Tip del índice más arriba que su base, y la base más arriba que la muñeca
+    is_vertical = (hand.landmark[8].y < hand.landmark[5].y) and (hand.landmark[5].y < hand.landmark[0].y)
+
+    return idx_up and is_vertical
 
 
-def detect_hollow_purple(h1, h2):
+def detect_hollow_purple(hand):
     """
-    Hollow Purple: Ambas manos unidas en pose de disparo (palmas juntas,
-    índices apuntando al frente como una pistola).
-    Firma: Palmas cercanas + ambos índices extendidos + demás dedos cerrados.
+    Hollow Purple (Shooting Pose con una mano).
+    Firma: Poses de 'Pistola' (Shooting Pose) -> Índice y pulgar extendidos (o índice y medio), demás cerrados.
+    El usuario especificó 1 sola mano.
     """
-    p1, p2 = landmarks_to_point(h1, 9), landmarks_to_point(h2, 9)
-    if calculate_euclidean_distance(p1, p2) > 0.15:
-        return False
+    fingers = get_extended_fingers(hand)
 
-    f1 = get_extended_fingers(h1)
-    f2 = get_extended_fingers(h2)
+    # Pose de pistola clásica (pulgar e índice)
+    gun_pose_1 = fingers[0] and fingers[1] and not fingers[2] and not fingers[3] and not fingers[4]
+    
+    # Pose de "bang" anime (índice y medio, pulgar puede estar extendido o no)
+    gun_pose_2 = fingers[1] and fingers[2] and not fingers[3] and not fingers[4]
 
-    # Ambos índices extendidos, medios/anulares/meñiques cerrados
-    gun1 = f1[1] and not f1[2] and not f1[3] and not f1[4]
-    gun2 = f2[1] and not f2[2] and not f2[3] and not f2[4]
-
-    return gun1 and gun2
+    return gun_pose_1 or gun_pose_2
 
 
 # =============================================================================
@@ -388,7 +385,6 @@ TECHNIQUE_INFO = {
     # Megumi
     "divine_dogs":    ("DIVINE DOGS: KEN", "Megumi"),
     "nue":            ("NUE: THUNDERBIRD", "Megumi"),
-    "orochi":         ("GREAT SERPENT: OROCHI", "Megumi"),
     "toad":           ("TOAD: GAMA", "Megumi"),
     "max_elephant":   ("MAX ELEPHANT", "Megumi"),
     "rabbit_escape":  ("RABBIT ESCAPE", "Megumi"),
@@ -421,10 +417,6 @@ def detect_active_technique(hands_list, handedness_list=None):
     if num_hands == 2:
         h1, h2 = hands_list[0], hands_list[1]
 
-        # --- Gojo: Técnicas de 2 manos (máxima prioridad) ---
-        if detect_hollow_purple(h1, h2):
-            return "hollow_purple", {"h1": h1, "h2": h2}
-
         # --- Técnicas de 2 manos (orden de prioridad) ---
         if detect_mahoraga(h1, h2):
             return "mahoraga", {"h1": h1, "h2": h2}
@@ -456,6 +448,9 @@ def detect_active_technique(hands_list, handedness_list=None):
             if detect_infinite_void(hand):
                 return "infinite_void", {"hand": hand}
 
+            if detect_hollow_purple(hand):
+                return "hollow_purple", {"hand": hand}
+
             if detect_red(hand):
                 return "red", {"hand": hand}
 
@@ -469,9 +464,6 @@ def detect_active_technique(hands_list, handedness_list=None):
 
             if detect_ratio(hand):
                 return "ratio", {"hand": hand}
-
-            if detect_orochi(hand):
-                return "orochi", {"hand": hand}
 
         # Blue (open palm) - lowest priority since it conflicts with many gestures
         for hand in hands_list:

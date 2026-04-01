@@ -60,55 +60,53 @@ class EffectGenerator:
     #  UTILIDAD: Interpolación + Jitter (Reutilizable)
     # =========================================================================
 
-    def _draw_silhouette_particles(self, frame, points, cx, cy, scale,
-                                    color, glow_color, jitter=4,
-                                    particles_per_seg=18, dot_size=2,
-                                    glow_chance=0.15, glow_radius=6):
-        """Método base para renderizar cualquier silueta como sistema de partículas."""
+    def _draw_fluid_silhouette(self, frame, points, base_cx, base_cy, scale, color=(128, 0, 128), glow_color=(200, 50, 200)):
+        """Método V4 NumPy fluido para renderizar siluetas con miles de micro-partículas orgánicas."""
+        num_per_edge = 90
+        t_vals = np.linspace(0, 1, num_per_edge)
+        
+        all_x = []
+        all_y = []
+        t = time.time()
+        
         for i in range(len(points)):
             p1 = points[i]
             p2 = points[(i + 1) % len(points)]
-
-            for t in np.linspace(0, 1, particles_per_seg):
-                x = p1[0] + (p2[0] - p1[0]) * t
-                y = p1[1] + (p2[1] - p1[1]) * t
-
-                jx = random.randint(-jitter, jitter)
-                jy = random.randint(-jitter, jitter)
-
-                px = int(cx + x * scale + jx)
-                py = int(cy + y * scale + jy)
-
-                if 0 <= px < frame.shape[1] and 0 <= py < frame.shape[0]:
-                    cv2.circle(frame, (px, py), dot_size, color, -1)
-                    if random.random() < glow_chance:
-                        cv2.circle(frame, (px, py), glow_radius, glow_color, 1)
+            
+            x_edge = p1[0] + (p2[0] - p1[0]) * t_vals
+            y_edge = p1[1] + (p2[1] - p1[1]) * t_vals
+            
+            # Fluid Math (Seno + Ruido Gaussiano)
+            noise_x = np.random.normal(0, 8, num_per_edge) + np.sin(t_vals * 15 + t*5) * 12
+            noise_y = np.random.normal(0, 8, num_per_edge) + np.cos(t_vals * 15 + t*5) * 12
+            
+            all_x.extend(base_cx + x_edge * scale + noise_x)
+            all_y.extend(base_cy + y_edge * scale + noise_y)
+            
+        overlay = np.zeros_like(frame)
+        for px, py in zip(all_x, all_y):
+            if 0 <= px < frame.shape[1] and 0 <= py < frame.shape[0]:
+                # Pequeños cubos y cuadrados
+                cv2.rectangle(overlay, (int(px), int(py)), (int(px)+2, int(py)+2), color, -1, cv2.LINE_AA)
+                
+        # Super capa de Glow Cinematográfico Aditivo
+        glow = cv2.GaussianBlur(overlay, (31, 31), 0)
+        cv2.addWeighted(frame, 1.0, glow, 2.5, 0, frame)
+        cv2.add(frame, overlay, frame)
 
     # =========================================================================
     #  MEGUMI FUSHIGURO
     # =========================================================================
 
     def draw_divine_dogs(self, frame, cx, cy, scale=130):
-        """Lobo de puntos morados oscuros con glow pasivo."""
-        self._draw_silhouette_particles(
-            frame, self._wolf_points, cx, cy, scale,
-            color=(128, 0, 128), glow_color=(200, 50, 200)
-        )
+        """Masa fluida de micro-partículas negras/moradas congregándose en lobos."""
+        # Perro Izquierdo y Derecho
+        self._draw_fluid_silhouette(frame, self._wolf_points, cx - 200, cy, scale, color=(50, 20, 80))
+        self._draw_fluid_silhouette(frame, self._wolf_points, cx + 200, cy, scale, color=(200, 200, 220))
 
-    def draw_nue(self, frame, cx, cy, scale=110):
-        """Alas de partículas eléctricas cyan/blancas."""
-        self._draw_silhouette_particles(
-            frame, self._nue_points, cx, cy, scale,
-            color=(230, 230, 50), glow_color=(255, 255, 200),
-            jitter=5, glow_chance=0.25
-        )
-        # Chispa eléctrica: líneas aleatorias entre puntos cercanos
-        for _ in range(8):
-            x1 = cx + random.randint(-int(scale * 1.2), int(scale * 1.2))
-            y1 = cy + random.randint(-int(scale * 0.8), int(scale * 0.5))
-            x2 = x1 + random.randint(-25, 25)
-            y2 = y1 + random.randint(-25, 25)
-            cv2.line(frame, (x1, y1), (x2, y2), (255, 255, 100), 1)
+    def draw_nue(self, frame, cx, cy, scale=140):
+        """Alas formadas por chispas eléctricas masivas y fluido de partículas."""
+        self._draw_fluid_silhouette(frame, self._nue_points, cx, cy, scale, color=(230, 230, 50))
 
     def draw_orochi(self, frame, hand_cx, hand_cy, frame_h, scale=1.0):
         """Serpiente: línea sinusoidal de puntos verdes que sube desde abajo hasta la mano."""
@@ -132,82 +130,117 @@ class EffectGenerator:
         cv2.circle(frame, (hand_cx, hand_cy), 8, (0, 255, 0), -1)
 
     def draw_toad(self, frame, cx, cy, fw, fh):
-        """Lenguas de partículas verdes lanzándose hacia los bordes."""
+        """Lenguas de fluido verde orgánico lanzándose hacia los bordes."""
+        t = time.time()
         targets = [(0, cy), (fw, cy), (cx, 0), (cx, fh)]
+        overlay = np.zeros_like(frame)
+        
         for tx, ty in targets:
-            num_dots = 30
-            for i in range(num_dots):
-                t = i / num_dots
-                x = int(cx + (tx - cx) * t)
-                y = int(cy + (ty - cy) * t)
-
-                # Solo dibuja la parte cercana (lengua corta)
-                if t > 0.4:
-                    break
-
-                jx = random.randint(-5, 5)
-                jy = random.randint(-5, 5)
-                if 0 <= x + jx < frame.shape[1] and 0 <= y + jy < frame.shape[0]:
-                    cv2.circle(frame, (x + jx, y + jy), 3, (30, 200, 30), -1)
+            num_dots = 120
+            t_vals = np.linspace(0, 1, num_dots)
+            
+            # Lenguas oscilando con el tiempo
+            reach = 0.5 + 0.3 * np.sin(t * 10)
+            valid_t = t_vals[t_vals < reach]
+            
+            x_vals = cx + (tx - cx) * valid_t
+            y_vals = cy + (ty - cy) * valid_t
+            
+            # Bamboleo del fluido
+            noise_x = np.sin(valid_t * 20 + t * 15) * 15
+            noise_y = np.cos(valid_t * 20 + t * 15) * 15
+            
+            for px, py in zip(x_vals + noise_x, y_vals + noise_y):
+                if 0 <= px < fw and 0 <= py < fh:
+                    cv2.rectangle(overlay, (int(px), int(py)), (int(px)+3, int(py)+3), (30, 200, 80), -1, cv2.LINE_AA)
+                    
+        glow = cv2.GaussianBlur(overlay, (21, 21), 0)
+        cv2.addWeighted(frame, 1.0, glow, 2.0, 0, frame)
+        cv2.add(frame, overlay, frame)
 
     def draw_max_elephant(self, frame, cx, cy, fw):
-        """Cascada de partículas de agua cayendo desde arriba."""
-        for _ in range(60):
-            x = cx + random.randint(-150, 150)
-            y = random.randint(0, cy)
-            jx = random.randint(-3, 3)
-
-            if 0 <= x + jx < frame.shape[1] and 0 <= y < frame.shape[0]:
-                # Partículas azules tipo agua
-                size = random.randint(2, 5)
-                cv2.circle(frame, (x + jx, y), size, (200, 150, 50), -1)
-                if random.random() < 0.3:
-                    cv2.circle(frame, (x + jx, y), size + 4, (230, 200, 100), 1)
+        """Cascada masiva de fluido azul/blanco cayendo desde el cielo usando matrices."""
+        overlay = np.zeros_like(frame)
+        num_drops = 600
+        
+        # Torrente cayendo
+        x_vals = np.random.normal(cx, 150, num_drops)
+        y_vals = np.random.uniform(0, cy, num_drops)
+        
+        for px, py in zip(x_vals, y_vals):
+            if 0 <= px < fw and 0 <= py < frame.shape[0]:
+                size = random.randint(2, 6)
+                cv2.rectangle(overlay, (int(px), int(py)), (int(px)+size, int(py)+size), (250, 200, 50), -1, cv2.LINE_AA)
+                
+        glow = cv2.GaussianBlur(overlay, (21, 21), 0)
+        cv2.addWeighted(frame, 1.0, glow, 1.5, 0, frame)
+        cv2.add(frame, overlay, frame)
 
     def draw_rabbit_escape(self, frame, fw, fh):
-        """Cientos de puntos blancos frenéticos por toda la cámara."""
-        for i in range(len(self._rabbit_particles)):
-            rx, ry = self._rabbit_particles[i]
-            # Movimiento caótico
-            rx += random.uniform(-0.03, 0.03)
-            ry += random.uniform(-0.03, 0.03)
-            rx = rx % 1.0
-            ry = ry % 1.0
-            self._rabbit_particles[i] = (rx, ry)
+        """Enjambre masivo de miles de partículas blancas parpadeantes (Enjambre)."""
+        overlay = np.zeros_like(frame)
+        num = len(self._rabbit_particles)
+        
+        # Swarming vectorizado
+        rx, ry = zip(*self._rabbit_particles)
+        rx = np.array(rx) + np.random.uniform(-0.025, 0.025, num)
+        ry = np.array(ry) + np.random.uniform(-0.025, 0.025, num)
+        
+        # Envuelve la pantalla
+        rx = rx % 1.0
+        ry = ry % 1.0
+        self._rabbit_particles = list(zip(rx, ry))
+        
+        px_vals = (rx * fw).astype(int)
+        py_vals = (ry * fh).astype(int)
+        
+        glow_mask = np.random.random(num) < 0.1
+        
+        for px, py, is_glow in zip(px_vals, py_vals, glow_mask):
+            cv2.rectangle(overlay, (px, py), (px+3, py+3), (250, 250, 250), -1, cv2.LINE_AA)
+            if is_glow:
+                cv2.circle(overlay, (px, py), 8, (255, 255, 255), 1, cv2.LINE_AA)
+                
+        glow = cv2.GaussianBlur(overlay, (15, 15), 0)
+        cv2.addWeighted(frame, 1.0, glow, 2.0, 0, frame)
+        cv2.add(frame, overlay, frame)
 
-            px = int(rx * fw)
-            py = int(ry * fh)
-            if 0 <= px < fw and 0 <= py < fh:
-                cv2.circle(frame, (px, py), 2, (240, 240, 240), -1)
-                if random.random() < 0.1:
-                    cv2.circle(frame, (px, py), 5, (255, 255, 255), 1)
-
-    def draw_mahoraga_wheel(self, frame, cx, cy, scale=150):
-        """Rueda de 8 radios dorados girando detrás del usuario."""
-        self._wheel_angle += 0.04  # Velocidad de rotación
-
-        # Dibujar el anillo exterior
-        for i in range(80):
-            angle = (i / 80) * 2 * math.pi + self._wheel_angle
-            x = int(cx + math.cos(angle) * scale)
-            y = int(cy + math.sin(angle) * scale)
-            jx = random.randint(-2, 2)
-            jy = random.randint(-2, 2)
-            if 0 <= x + jx < frame.shape[1] and 0 <= y + jy < frame.shape[0]:
-                cv2.circle(frame, (x + jx, y + jy), 2, (0, 200, 255), -1)
-
-        # Dibujar los 8 radios
-        for spoke in range(8):
-            angle = (spoke / 8) * 2 * math.pi + self._wheel_angle
-            for r in range(10, int(scale), 8):
-                x = int(cx + math.cos(angle) * r)
-                y = int(cy + math.sin(angle) * r)
-                jx = random.randint(-2, 2)
-                jy = random.randint(-2, 2)
-                if 0 <= x + jx < frame.shape[1] and 0 <= y + jy < frame.shape[0]:
-                    cv2.circle(frame, (x + jx, y + jy), 2, (0, 215, 255), -1)
-                    if random.random() < 0.15:
-                        cv2.circle(frame, (x, y), 5, (50, 235, 255), 1)
+    def draw_mahoraga_wheel(self, frame, cx, cy, scale=220):
+        """Rueda de miles de partículas doradas vibrando."""
+        self._wheel_angle += 0.03
+        overlay = np.zeros_like(frame)
+        t = time.time()
+        
+        # 3000 Micro-partículas doradas
+        num_particles = 3000
+        angles = np.random.uniform(0, 2 * math.pi, num_particles)
+        radii = np.zeros(num_particles)
+        
+        is_spoke = np.random.random(num_particles) > 0.25
+        
+        # 75% en los Radios, 25% en el Aro
+        for i in range(num_particles):
+            if is_spoke[i]:
+                radii[i] = np.random.uniform(0, scale)
+                closest_spoke = round((angles[i] - self._wheel_angle) / (math.pi / 4))
+                angles[i] = closest_spoke * (math.pi / 4) + self._wheel_angle + np.random.normal(0, 0.015)
+            else:
+                radii[i] = scale + np.random.normal(0, 5)
+                
+        # Termo-vibración fluida matemática (Funciones de onda complejas)
+        vibration_r = np.sin(t * 15 + angles * 8) * 6
+        radii += vibration_r
+        
+        x_vals = cx + np.cos(angles) * radii
+        y_vals = cy + np.sin(angles) * radii
+        
+        for px, py in zip(x_vals, y_vals):
+            if 0 <= px < frame.shape[1] and 0 <= py < frame.shape[0]:
+                cv2.rectangle(overlay, (int(px), int(py)), (int(px)+2, int(py)+2), (0, 215, 255), -1, cv2.LINE_AA)
+                
+        glow = cv2.GaussianBlur(overlay, (41, 41), 0)
+        cv2.addWeighted(frame, 1.0, glow, 2.5, 0, frame)
+        cv2.add(frame, overlay, frame)
 
     # =========================================================================
     #  KENTO NANAMI

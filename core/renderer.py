@@ -200,11 +200,11 @@ class CinematicRenderer:
             ("SATORU GOJO", [
                 "Infinite Void (Fingers Crossed)", 
                 "Blue (Index/Middle Point)", 
-                "Red (Thumb/Index/Middle)", 
-                "Hollow Purple (Pinch Thrust)"
+                "Red (Index Point Up)", 
+                "Hollow Purple (Shooting Pose)"
             ], (255, 200, 100)),
             ("MEGUMI FUSHIGURO", [
-                "Divine Dogs (Palms Joined)", 
+                "Divine Dogs (Palms Joined & Thumbs Up)", 
                 "Nue (Crossed Wrists)",
                 "Toad (Double Fists)",
                 "Mahoraga (Fists Stacked)", 
