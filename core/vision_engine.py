@@ -101,8 +101,8 @@ class CursedVision:
             running_mode=VisionRunningMode.VIDEO,
             num_hands=2,
             min_hand_detection_confidence=0.85,
-            min_hand_presence_confidence=0.85,
-            min_tracking_confidence=0.85,
+            min_hand_presence_confidence=0.5,
+            min_tracking_confidence=0.5,
         )
         self.hand_landmarker = HandLandmarker.create_from_options(options)
         self.smoother = LandmarkSmoother(alpha=0.65)

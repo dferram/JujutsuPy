@@ -35,25 +35,26 @@ class EffectGenerator:
 
     @staticmethod
     def _gen_wolf():
+        """Geometría masivamente detallada de una cabeza de Lobo Divino."""
         return [
-            (0.0, -0.8), (0.2, -0.4), (0.5, -0.9), (0.4, -0.3),
-            (0.6, -0.1), (0.9, 0.2), (1.0, 0.4), (0.8, 0.5),
-            (0.7, 0.7), (0.4, 0.8), (-0.3, 0.9), (-0.6, 0.5),
-            (-0.5, 0.0), (-0.2, -0.3)
+            (0.0, -0.8), (0.1, -0.6), (0.3, -0.5), (0.5, -0.9), (0.45, -0.6), (0.6, -0.1), 
+            (0.8, 0.0), (0.9, 0.2), (1.0, 0.4), (0.9, 0.5), (0.8, 0.5), (0.7, 0.7), 
+            (0.5, 0.75), (0.4, 0.8), (0.1, 0.8), (-0.3, 0.9), (-0.5, 0.8), (-0.6, 0.5), 
+            (-0.6, 0.2), (-0.5, 0.0), (-0.4, -0.2), (-0.2, -0.3), (-0.1, -0.6)
         ]
 
     @staticmethod
     def _gen_nue():
-        """Silueta de un búho/ave con alas extendidas."""
+        """Silueta mega-detallada de un búho/ave con alas extendidas masivas."""
         return [
-            # Ala izquierda
-            (-1.2, 0.0), (-1.0, -0.3), (-0.7, -0.5), (-0.4, -0.3),
-            # Cabeza
-            (-0.2, -0.6), (0.0, -0.8), (0.2, -0.6),
-            # Ala derecha
-            (0.4, -0.3), (0.7, -0.5), (1.0, -0.3), (1.2, 0.0),
-            # Cola/cuerpo inferior
-            (0.8, 0.3), (0.3, 0.5), (0.0, 0.6), (-0.3, 0.5), (-0.8, 0.3),
+            # Ala izquierda gigante
+            (-1.5, 0.2), (-1.2, 0.0), (-1.0, -0.3), (-0.8, -0.2), (-0.7, -0.5), (-0.5, -0.4), (-0.4, -0.3),
+            # Cabeza bestial
+            (-0.3, -0.5), (-0.2, -0.6), (-0.1, -0.8), (0.0, -0.9), (0.1, -0.8), (0.2, -0.6), (0.3, -0.5),
+            # Ala derecha gigante
+            (0.4, -0.3), (0.5, -0.4), (0.7, -0.5), (0.8, -0.2), (1.0, -0.3), (1.2, 0.0), (1.5, 0.2),
+            # Cola/cuerpo inferior en cascada
+            (1.0, 0.1), (0.8, 0.3), (0.6, 0.4), (0.3, 0.5), (0.0, 0.6), (-0.3, 0.5), (-0.6, 0.4), (-0.8, 0.3), (-1.0, 0.1)
         ]
 
     # =========================================================================
@@ -61,13 +62,29 @@ class EffectGenerator:
     # =========================================================================
 
     def _draw_fluid_silhouette(self, frame, points, base_cx, base_cy, scale, color=(128, 0, 128), glow_color=(200, 50, 200)):
-        """Método V4 NumPy fluido para renderizar siluetas con miles de micro-partículas orgánicas."""
+        """Método V4 NumPy fluido para renderizar siluetas con miles de micro-partículas orgánicas + Base Sólida."""
+        t = time.time()
+        overlay = np.zeros_like(frame)
+
+        # 1. Dibujar el núcleo (Polygon base) para dar legibilidad a la figura
+        transformed_points = []
+        for p in points:
+            px = int(base_cx + p[0] * scale)
+            py = int(base_cy + p[1] * scale)
+            transformed_points.append([px, py])
+            
+        pts = np.array(transformed_points, np.int32)
+        pts = pts.reshape((-1, 1, 2))
+        
+        # Un relleno semitransparente para el "cuerpo" del animal
+        cv2.fillPoly(overlay, [pts], color, cv2.LINE_AA)
+
+        # 2. Generar enjambre de micro-partículas en los bordes para dar el efecto fluido
         num_per_edge = 90
         t_vals = np.linspace(0, 1, num_per_edge)
         
         all_x = []
         all_y = []
-        t = time.time()
         
         for i in range(len(points)):
             p1 = points[i]
@@ -77,17 +94,16 @@ class EffectGenerator:
             y_edge = p1[1] + (p2[1] - p1[1]) * t_vals
             
             # Fluid Math (Seno + Ruido Gaussiano)
-            noise_x = np.random.normal(0, 8, num_per_edge) + np.sin(t_vals * 15 + t*5) * 12
-            noise_y = np.random.normal(0, 8, num_per_edge) + np.cos(t_vals * 15 + t*5) * 12
+            noise_x = np.random.normal(0, 12, num_per_edge) + np.sin(t_vals * 15 + t*5) * 15
+            noise_y = np.random.normal(0, 12, num_per_edge) + np.cos(t_vals * 15 + t*5) * 15
             
             all_x.extend(base_cx + x_edge * scale + noise_x)
             all_y.extend(base_cy + y_edge * scale + noise_y)
             
-        overlay = np.zeros_like(frame)
         for px, py in zip(all_x, all_y):
             if 0 <= px < frame.shape[1] and 0 <= py < frame.shape[0]:
-                # Pequeños cubos y cuadrados
-                cv2.rectangle(overlay, (int(px), int(py)), (int(px)+2, int(py)+2), color, -1, cv2.LINE_AA)
+                # Pequeños cubos y cuadrados brillantes
+                cv2.rectangle(overlay, (int(px), int(py)), (int(px)+2, int(py)+2), glow_color, -1, cv2.LINE_AA)
                 
         # Super capa de Glow Cinematográfico Aditivo
         glow = cv2.GaussianBlur(overlay, (31, 31), 0)
@@ -98,14 +114,14 @@ class EffectGenerator:
     #  MEGUMI FUSHIGURO
     # =========================================================================
 
-    def draw_divine_dogs(self, frame, cx, cy, scale=130):
-        """Masa fluida de micro-partículas negras/moradas congregándose en lobos."""
-        # Perro Izquierdo y Derecho
-        self._draw_fluid_silhouette(frame, self._wolf_points, cx - 200, cy, scale, color=(50, 20, 80))
-        self._draw_fluid_silhouette(frame, self._wolf_points, cx + 200, cy, scale, color=(200, 200, 220))
+    def draw_divine_dogs(self, frame, cx, cy, scale=280):
+        """Masa fluida GIGANTE de micro-partículas negras/moradas congregándose en lobos."""
+        # Perro Izquierdo y Derecho (más separados por el tamaño)
+        self._draw_fluid_silhouette(frame, self._wolf_points, cx - 350, cy, scale, color=(50, 20, 80))
+        self._draw_fluid_silhouette(frame, self._wolf_points, cx + 350, cy, scale, color=(200, 200, 220))
 
-    def draw_nue(self, frame, cx, cy, scale=140):
-        """Alas formadas por chispas eléctricas masivas y fluido de partículas."""
+    def draw_nue(self, frame, cx, cy, scale=300):
+        """Alas formadas por chispas eléctricas masivas y fluido de partículas gigantes."""
         self._draw_fluid_silhouette(frame, self._nue_points, cx, cy, scale, color=(230, 230, 50))
 
     def draw_orochi(self, frame, hand_cx, hand_cy, frame_h, scale=1.0):
@@ -246,24 +262,41 @@ class EffectGenerator:
     #  KENTO NANAMI
     # =========================================================================
 
-    def draw_overtime_aura(self, frame, cx, cy, scale=80):
-        """Aura de partículas amarillas densas rodeando el puño + reloj digital."""
-        # Aura circular densa
-        for _ in range(100):
-            angle = random.uniform(0, 2 * math.pi)
-            r = random.uniform(scale * 0.5, scale * 1.2)
-            x = int(cx + math.cos(angle) * r)
-            y = int(cy + math.sin(angle) * r)
-
-            if 0 <= x < frame.shape[1] and 0 <= y < frame.shape[0]:
-                cv2.circle(frame, (x, y), 2, (0, 220, 255), -1)
-                if random.random() < 0.2:
-                    cv2.circle(frame, (x, y), 6, (50, 255, 255), 1)
-
-        # Reloj digital en la esquina
+    def draw_overtime_aura(self, frame, cx, cy, scale=180):
+        """Fuego de Energía Maldita estilo corbata de Nanami (Amarillo y Negro)."""
+        t = time.time()
+        overlay = np.zeros_like(frame)
+        
+        num_particles = 1500
+        # Distribuir alrededor de la mano
+        angles = np.random.uniform(0, 2 * math.pi, num_particles)
+        # Fuego fluyendo intensamente HACIA ARRIBA (Y negativa)
+        radii = np.random.uniform(0, scale, num_particles)
+        
+        x_vals = cx + np.cos(angles) * radii
+        y_vals = cy + np.sin(angles) * radii - np.random.uniform(0, scale*2.5, num_particles)
+        
+        # Ruido y vibración de fuego
+        noise_x = np.sin(t * 12 + y_vals * 0.05) * 20
+        
+        # 20% Puntos Negros (Corbata Nanami), 80% Amarillo/Naranja fuego
+        is_black = np.random.random(num_particles) < 0.20
+        
+        for px, py, black in zip(x_vals + noise_x, y_vals, is_black):
+            if 0 <= px < frame.shape[1] and 0 <= py < frame.shape[0]:
+                if black:
+                    cv2.rectangle(overlay, (int(px), int(py)), (int(px)+4, int(py)+4), (10, 10, 10), -1, cv2.LINE_AA)
+                else:
+                    cv2.rectangle(overlay, (int(px), int(py)), (int(px)+3, int(py)+3), (0, 200, 255), -1, cv2.LINE_AA)
+                    
+        glow = cv2.GaussianBlur(overlay, (31, 31), 0)
+        cv2.addWeighted(frame, 1.0, glow, 2.0, 0, frame)
+        cv2.add(frame, overlay, frame)
+        
+        # Reloj digital tech en la parte superior derecha
         clock_str = time.strftime("%H:%M:%S")
-        cv2.putText(frame, f"OVERTIME {clock_str}", (frame.shape[1] - 300, 70),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 255), 2)
+        cv2.putText(frame, f"RESTRICTION: OVERTIME {clock_str}", (frame.shape[1] - 450, 70),
+                    cv2.FONT_HERSHEY_PLAIN, 1.5, (0, 200, 255), 2)
 
     def draw_ratio_line(self, frame, cx, cy, length=800):
         """

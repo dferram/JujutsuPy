@@ -266,29 +266,7 @@ class CinematicRenderer:
         cvzone.putTextRect(canvas, state_text, (self.W - 420, self.H - 50), 
                            scale=1.2, thickness=1, colorT=final_color, colorR=(15, 10, 25), font=cv2.FONT_HERSHEY_PLAIN)
                            
-        # --- 3. Cursed Energy Bar (Sci-Fi look) ---
-        bar_w = 400
-        bar_h = 10
-        ex = self.W // 2 - bar_w // 2
-        ey = self.H - 80
-        
-        cv2.putText(canvas, f"CURSED ENERGY FREQUENCY: {int(energy_system.current_energy)}%", (ex, ey - 10), 
-                    cv2.FONT_HERSHEY_PLAIN, 1.2, (255, 255, 255), 1)
-                    
-        # Fondo oscuro
-        cv2.rectangle(canvas, (ex, ey), (ex + bar_w, ey + bar_h), (30, 30, 30), -1)
-        
-        # Llenado luminoso
-        fill_w = int(bar_w * (energy_system.current_energy / 100.0))
-        color_energy = (255, 220, 50) # Cyan by default
-        if is_active:
-            color_energy = (50, 50, 255) # Rojo/Morado si se drena
-            
-        cv2.rectangle(canvas, (ex, ey), (ex + fill_w, ey + bar_h), color_energy, -1)
-        # Borde exterior tech
-        cv2.rectangle(canvas, (ex - 2, ey - 2), (ex + bar_w + 2, ey + bar_h + 2), (100, 100, 100), 1)
-
-        # --- 4. Technique Name ---
+        # --- 3. Technique Name ---
         if tech_name and is_active:
             # Texto azul celeste gigante tipo anime
             t_size = cv2.getTextSize(tech_name, cv2.FONT_HERSHEY_SIMPLEX, 1.5, 2)[0]
