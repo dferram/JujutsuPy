@@ -149,13 +149,6 @@ class CursedVision:
             cx, cy = get_centroid(hand_data["h1"], hand_data["h2"], fw, fh, offset_y=-120)
             self.effect_gen.draw_nue(frame, cx, cy)
 
-        elif technique_id == "max_elephant":
-            cx, cy = get_centroid(hand_data["h1"], hand_data["h2"], fw, fh, offset_y=0)
-            self.effect_gen.draw_max_elephant(frame, cx, cy, fw)
-
-        elif technique_id == "rabbit_escape":
-            self.effect_gen.draw_rabbit_escape(frame, fw, fh)
-
         elif technique_id == "mahoraga":
             cx, cy = get_centroid(hand_data["h1"], hand_data["h2"], fw, fh, offset_y=-100)
             self.effect_gen.draw_mahoraga_wheel(frame, cx, cy)

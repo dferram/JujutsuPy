@@ -319,8 +319,6 @@ TECHNIQUE_INFO = {
     # Megumi
     "divine_dogs":    ("DIVINE DOGS: KEN", "Megumi"),
     "nue":            ("NUE: THUNDERBIRD", "Megumi"),
-    "max_elephant":   ("MAX ELEPHANT", "Megumi"),
-    "rabbit_escape":  ("RABBIT ESCAPE", "Megumi"),
     "mahoraga":       ("MAHORAGA: EIGHT-HANDLED SWORD", "Megumi"),
     # Nanami
     "overtime":       ("OVERTIME MODE", "Nanami"),
@@ -348,12 +346,6 @@ def detect_active_technique(hands_list, handedness_list=None):
         # --- Técnicas de 2 manos (orden de prioridad) ---
         if detect_mahoraga(h1, h2):
             return "mahoraga", {"h1": h1, "h2": h2}
-
-        if detect_max_elephant(h1, h2):
-            return "max_elephant", {"h1": h1, "h2": h2}
-
-        if detect_rabbit_escape(h1, h2):
-            return "rabbit_escape", {"h1": h1, "h2": h2}
 
         if detect_nue(h1, h2):
             return "nue", {"h1": h1, "h2": h2}
