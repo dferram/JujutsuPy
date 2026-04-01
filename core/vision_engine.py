@@ -16,8 +16,9 @@ import os
 from utils.math_helpers import get_centroid, get_single_hand_center
 from core.effects import EffectGenerator
 from core.gestures import detect_active_technique, TECHNIQUE_INFO
-from core.hud import CursedEnergySystem, draw_hud
+from core.hud import CursedEnergySystem
 from core.physics import PhysicsParticleSystem
+from core.renderer import CinematicRenderer
 
 
 # Adaptador: la nueva API retorna NormalizedLandmark objects
@@ -79,6 +80,7 @@ class CursedVision:
         self.effect_gen = EffectGenerator()
         self.energy = CursedEnergySystem(max_energy=100.0)
         self.physics = PhysicsParticleSystem(max_particles=300)
+        self.renderer = CinematicRenderer(1920, 1080)
 
         # Estado de carga universal
         self.charge_frames = 0
@@ -142,121 +144,95 @@ class CursedVision:
             cx, cy = get_centroid(hand_data["h1"], hand_data["h2"], fw, fh, offset_y=-60)
             self.effect_gen.draw_rika(frame, cx, cy, scale=120)
 
-        # --- GOJO ---
+        # --- GOJO (Hardcoded a pantalla completa en el centro) ---
         elif technique_id == "infinite_void":
-            cx, cy = get_single_hand_center(hand_data["hand"], fw, fh)
+            cx, cy = fw // 2, fh // 2
             self.effect_gen.draw_infinite_void(frame, cx, cy, fw, fh)
 
         elif technique_id == "blue":
-            cx, cy = get_single_hand_center(hand_data["hand"], fw, fh)
+            cx, cy = fw // 2, fh // 2
             self.effect_gen.draw_blue_attraction(frame, cx, cy, self.physics, fw, fh)
 
         elif technique_id == "red":
-            cx, cy = get_single_hand_center(hand_data["hand"], fw, fh)
+            cx, cy = fw // 2, fh // 2
             self.effect_gen.draw_red_repulsion(frame, cx, cy, self.physics, fw, fh)
 
         elif technique_id == "hollow_purple":
-            cx, cy = get_centroid(hand_data["h1"], hand_data["h2"], fw, fh, offset_y=0)
+            cx, cy = fw // 2, fh // 2
             self.effect_gen.draw_hollow_purple(frame, cx, cy, self.physics, fw, fh)
-
-    def _draw_hand_wireframe(self, frame, hand_landmarks, fw, fh):
-        """Dibuja las conexiones y landmarks de una mano manualmente."""
-        points = {}
-        for idx, lm in enumerate(hand_landmarks.landmark):
-            px, py = int(lm.x * fw), int(lm.y * fh)
-            points[idx] = (px, py)
-            cv2.circle(frame, (px, py), 3, (128, 0, 128), -1)
-
-        # Dibujar conexiones
-        connections = [
-            (0, 1), (1, 2), (2, 3), (3, 4),       # Pulgar
-            (0, 5), (5, 6), (6, 7), (7, 8),       # Indice
-            (0, 17), (5, 9), (9, 13), (13, 17),   # Palma
-            (9, 10), (10, 11), (11, 12),           # Medio
-            (13, 14), (14, 15), (15, 16),          # Anular
-            (17, 18), (18, 19), (19, 20),          # Menique
-        ]
-        for c1, c2 in connections:
-            if c1 in points and c2 in points:
-                cv2.line(frame, points[c1], points[c2], (40, 40, 40), 2)
 
     def run(self):
         """Bucle principal de captura y procesamiento en tiempo real."""
-        print("Iniciando JujutsuPy Vision Engine...")
-        print("16 Gestos: Gojo (Void/Blue/Red/Purple), Megumi (Dogs/Nue/Orochi/")
-        print("   Toad/Elephant/Rabbit/Mahoraga), Nanami (Overtime/Ratio),")
-        print("   Higuruma (Gavel), Yuta (Rika/Domain)")
-        print("   Presiona 'q' en la ventana para salir.\n")
+        print("Iniciando JujutsuPy Cinematic Vision Engine...")
+        print("Pantalla completa activa. Presiona 'q' para salir.\n")
+
+        # Configurar pantalla completa
+        cv2.namedWindow("JujutsuPy Vision Engine", cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty("JujutsuPy Vision Engine", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
         prev_time = time.time()
 
         while True:
-            ret, frame = self.cap.read()
+            ret, cam_frame = self.cap.read()
             if not ret:
-                print("[Error] Leyendo frame de la camara. Saliendo...")
                 break
 
-            frame = cv2.flip(frame, 1)
-            fh, fw = frame.shape[:2]
+            cam_frame = cv2.flip(cam_frame, 1)
 
-            # Convertir frame a mp.Image para la nueva API
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # Convertir frame a mp.Image para MediaPipe
+            rgb_frame = cv2.cvtColor(cam_frame, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
-            # Timestamp incremental (la API VIDEO requiere timestamps crecientes)
-            self._frame_timestamp_ms += 33  # ~30fps
+            self._frame_timestamp_ms += 33
             result = self.hand_landmarker.detect_for_video(mp_image, self._frame_timestamp_ms)
 
-            # Convertir resultado a formato compatible con nuestros gestores
+            # Calcular FPS
+            curr_time = time.time()
+            fps = 1 / (curr_time - prev_time) if (curr_time - prev_time) > 0 else 30.0
+            prev_time = curr_time
+
+            # Preparamos el CANVAS gigante
+            canvas = self.renderer.create_canvas()
+            self.renderer.draw_background(canvas)
+            cw, ch = self.renderer.W, self.renderer.H
+
+            # Convertir wrappers
             hands_list = []
             if result.hand_landmarks:
                 for hand_lms in result.hand_landmarks:
-                    wrapper = _LandmarkListWrapper(hand_lms)
-                    hands_list.append(wrapper)
-                    self._draw_hand_wireframe(frame, wrapper, fw, fh)
+                    hands_list.append(_LandmarkListWrapper(hand_lms))
 
-            # Deteccion de gesto activo
             technique_id, hand_data = detect_active_technique(hands_list)
-
             technique_detected = technique_id is not None and self.energy.has_energy()
+
+            tech_name, character = None, None
+            is_active = False
 
             if technique_detected:
                 self.charge_frames += 1
                 if self.charge_frames >= self.ACTIVATION_THRESHOLD:
+                    is_active = True
                     self.current_technique = technique_id
-                    info = TECHNIQUE_INFO.get(technique_id, ("UNKNOWN", "???"))
-                    tech_name, character = info
+                    tech_name, character = TECHNIQUE_INFO.get(technique_id, ("UNKNOWN", "???"))
 
-                    # Renderizar efecto visual
-                    self._render_effect(frame, technique_id, hand_data, fw, fh)
-
-                    # Actualizar energia (gastando)
+                    # Renderizamos efectos sobre el CANVAS (al tamaño gigante)
+                    self._render_effect(canvas, technique_id, hand_data, cw, ch)
                     self.energy.update(is_active=True)
-
-                    # HUD con tecnica activa
-                    draw_hud(frame, self.energy, tech_name, character)
                 else:
-                    # Estado: Cargando
                     self.energy.update(is_active=False)
-                    draw_hud(frame, self.energy)
-                    cv2.putText(frame, "Cargando Energia Maldita...", (30, 100),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 2)
             else:
-                # Sin gesto: decaimiento y regeneracion
                 self.charge_frames = max(0, self.charge_frames - 2)
                 if self.charge_frames == 0:
                     self.current_technique = None
                 self.energy.update(is_active=False)
-                draw_hud(frame, self.energy)
 
-            # FPS
-            curr_time = time.time()
-            fps = 1 / (curr_time - prev_time) if (curr_time - prev_time) > 0 else 30.0
-            prev_time = curr_time
-            cv2.putText(frame, f"FPS: {int(fps)}", (fw - 100, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            # Dibujar la camara en la esquina (el inset se encarga internamente de dibujar los neones de la mano)
+            self.renderer.draw_webcam_inset(canvas, cam_frame, hands_list)
 
-            cv2.imshow("JujutsuPy Vision Engine", frame)
+            # Dibujar el HUD cinematográfico
+            self.renderer.draw_professional_hud(canvas, self.energy, fps, tech_name, character, is_active)
+
+            cv2.imshow("JujutsuPy Vision Engine", canvas)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 

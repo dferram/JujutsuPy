@@ -346,67 +346,101 @@ class EffectGenerator:
     #  SATORU GOJO — Limitless
     # =========================================================================
 
-    def draw_infinite_void(self, frame, cx, cy, fw, fh, scale=120):
+    def draw_infinite_void(self, frame, cx, cy, fw, fh, scale=300):
         """
-        Infinite Void: Portal elíptico cian/blanco con anillos giratorios
-        y 'estrellas' de datos simulando el vacío infinito.
+        Infinite Void (Anime Quality): Portal masivo en el centro de la pantalla.
+        Filamentos entrelazados, anillos rotando, blanco y cian neón.
         """
-        self._void_angle += 0.03
+        self._void_angle += 0.05
 
-        # Oscurecer ligeramente el fondo para efecto de dominio
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (0, 0), (fw, fh), (10, 5, 15), -1)
-        cv2.addWeighted(overlay, 0.3, frame, 0.7, 0, frame)
+        # Oscurecer severamente el fondo
+        overlay = np.zeros_like(frame)
+        
+        # Anillos elípticos de filamentos entrelazados
+        for ring in range(5):
+            r_base = scale + ring * 40
+            pts = 120
+            # Dos filamentos en espiral por anillo
+            for f in range(2):
+                prev_pt = None
+                for i in range(pts + 1):
+                    # Fase del filamento
+                    theta = (i / pts) * 2 * math.pi
+                    # Onda senoidal sobre el radio para el efecto de filamento
+                    wave = math.sin(theta * 8 + self._void_angle * 3 + f * math.pi) * 30
+                    
+                    angle = theta + self._void_angle * (1.5 if ring % 2 == 0 else -1.5)
+                    
+                    # Proyección elíptica
+                    x = int(cx + math.cos(angle) * (r_base + wave) * 0.7)
+                    y = int(cy + math.sin(angle) * (r_base + wave) * 1.5)
+                    
+                    if 0 <= x < fw and 0 <= y < fh:
+                        if prev_pt:
+                            # Cyan brillante / Blanco neón (BGR)
+                            color = (255, 255, 255) if f == 0 else (255, 255, 150)
+                            thickness = 2 if f == 0 else 4
+                            cv2.line(overlay, prev_pt, (x, y), color, thickness)
+                        prev_pt = (x, y)
+        
+        # Centro: Núcleo interior masivo
+        cv2.ellipse(overlay, (cx, cy), (int(scale * 0.6), int(scale * 1.3)), 0, 0, 360, (255, 255, 255), 3)
+        cv2.ellipse(overlay, (cx, cy), (int(scale * 0.6), int(scale * 1.3)), 0, 0, 360, (255, 255, 100), 10)
+        
+        # Partículas internas siendo absorbidas
+        for _ in range(40):
+            r = random.uniform(0, scale * 0.5)
+            ang = random.uniform(0, 2*math.pi)
+            px = int(cx + math.cos(ang) * r * 0.7)
+            py = int(cy + math.sin(ang) * r * 1.5)
+            cv2.circle(overlay, (px, py), random.randint(1, 3), (255, 255, 255), -1)
 
-        # Anillos concéntricos giratorios
-        for ring in range(3):
-            r = int(scale * (0.5 + ring * 0.4))
-            pts = 60
-            for i in range(pts):
-                angle = (i / pts) * 2 * math.pi + self._void_angle * (ring + 1)
-                x = int(cx + math.cos(angle) * r)
-                y = int(cy + math.sin(angle) * r * 0.6)  # Elíptico
-
-                if 0 <= x < fw and 0 <= y < fh:
-                    brightness = int(150 + 105 * math.sin(angle * 3 + self._void_angle * 5))
-                    color = (brightness, brightness, 255)  # Cian/blanco
-                    cv2.circle(frame, (x, y), 2, color, -1)
-
-        # Estrellas de datos (puntos aleatorios brillantes)
-        for _ in range(30):
-            angle = random.uniform(0, 2 * math.pi)
-            r = random.uniform(10, scale * 1.5)
-            x = int(cx + math.cos(angle) * r)
-            y = int(cy + math.sin(angle) * r * 0.6)
-            if 0 <= x < fw and 0 <= y < fh:
-                if random.random() < 0.5:
-                    cv2.circle(frame, (x, y), 1, (255, 255, 255), -1)
-                else:
-                    cv2.circle(frame, (x, y), 1, (200, 200, 50), -1)
-
-        # Centro brillante pulsante
-        pulse = int(15 + 8 * math.sin(time.time() * 4))
-        cv2.circle(frame, (cx, cy), pulse, (255, 255, 255), 2)
-        cv2.circle(frame, (cx, cy), pulse + 5, (200, 200, 50), 1)
+        # Blur y addWeighted para efecto Glow
+        glow = cv2.GaussianBlur(overlay, (21, 21), 0)
+        frame[:] = cv2.addWeighted(frame, 1.0, glow, 0.8, 0)
+        frame[:] = cv2.add(frame, overlay)
 
     def draw_blue_attraction(self, frame, cx, cy, physics_system, fw, fh):
         """
-        Blue (Lapse): Punto de gravedad azul que succiona partículas.
-        Usa el PhysicsParticleSystem para simulación vectorial real.
+        Blue (Anime Quality): Núcleo de energía super denso.
+        Líneas de campo magnético atrayendo todo hacia adentro.
         """
-        # Spawn partículas ambientales si hacen falta
-        physics_system.spawn_ambient(fw, fh, count=8, color=(255, 150, 50))
+        # Spawn partículas ambientales extra para demostrar la fuerza de succión
+        physics_system.spawn_ambient(fw, fh, count=20, color=(255, 250, 150)) # Más cian claro
 
-        # Aplicar fuerza centrípeta (atracción)
-        physics_system.apply_attraction(cx, cy, strength=3.0)
-        physics_system.update(damping=0.92)
-        physics_system.render(frame, base_size=2)
+        # Fuerza centrípeta extrema
+        physics_system.apply_attraction(cx, cy, strength=8.0)
+        physics_system.update(damping=0.90)
+        physics_system.render(frame, base_size=3)
 
-        # Núcleo azul brillante
-        pulse = int(12 + 6 * math.sin(time.time() * 6))
-        cv2.circle(frame, (cx, cy), pulse, (255, 100, 0), -1)     # Azul denso
-        cv2.circle(frame, (cx, cy), pulse + 8, (255, 180, 50), 2) # Halo azul
-        cv2.circle(frame, (cx, cy), pulse + 16, (255, 200, 100), 1)
+        # Dibujar lineas de campo magnético (espirales colapsando)
+        t = time.time() * 5
+        for spir in range(8):
+            pts = []
+            for r in range(10, 400, 20):
+                # Espiral logarítmica invertida
+                ang = r * 0.02 + t + (spir * math.pi / 4)
+                x = int(cx + math.cos(ang) * r)
+                y = int(cy + math.sin(ang) * r)
+                pts.append((x, y))
+            
+            for i in range(len(pts)-1):
+                p1, p2 = pts[i], pts[i+1]
+                if 0 <= p1[0] < fw and 0 <= p1[1] < fh:
+                    alpha = 1.0 - (i / len(pts))
+                    color = (int(255 * alpha), int(255 * alpha), int(100 * alpha))
+                    cv2.line(frame, p1, p2, color, max(1, int(3*alpha)))
+
+        # Núcleo 
+        pulse = int(25 + 10 * math.sin(time.time() * 15))
+        core_glow = np.zeros_like(frame)
+        cv2.circle(core_glow, (cx, cy), pulse, (255, 220, 100), -1)
+        cv2.circle(core_glow, (cx, cy), pulse + 15, (255, 150, 50), -1)
+        
+        # Efecto Black-hole Inverso (Centro negro purísimo rodeado de luz intensa)
+        glow = cv2.GaussianBlur(core_glow, (41, 41), 0)
+        frame[:] = cv2.addWeighted(frame, 1.0, glow, 1.5, 0)
+        cv2.circle(frame, (cx, cy), pulse - 5, (0, 0, 0), -1) # Núcleo oscuro super-denso
 
     def draw_red_repulsion(self, frame, cx, cy, physics_system, fw, fh):
         """
