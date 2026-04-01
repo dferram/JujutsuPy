@@ -232,31 +232,48 @@ class EffectGenerator:
         cv2.putText(frame, f"OVERTIME {clock_str}", (frame.shape[1] - 300, 70),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 255), 2)
 
-    def draw_ratio_line(self, frame, cx, cy, length=200):
-        """Línea de energía azul con punto 70% brillante 'CRITICAL HIT'."""
-        # Línea base azul
+    def draw_ratio_line(self, frame, cx, cy, length=800):
+        """
+        Nanami 7:3 Ratio (Anime Quality): Haz de luz láser gigante con 
+        aberración cromática y destellos masivos.
+        """
         x_start = cx - length // 2
         x_end = cx + length // 2
-        cv2.line(frame, (x_start, cy), (x_end, cy), (255, 100, 0), 2)
-
-        # Punto crítico al 70%
         crit_x = int(x_start + length * 0.7)
+        
+        # Buffer negro para el láser y composicion
+        laser_overlay = np.zeros_like(frame)
+        
+        # Aberración cromática (RGB offset brutal)
+        offsets = [
+            (-8, 0, (0, 0, 255)),  # Rojo puro (Cian ausente)
+            (0, 0, (0, 255, 0)),   # Verde
+            (8, 0, (255, 0, 0))    # Azul
+        ]
+        
+        for ox, oy, color in offsets:
+            cv2.line(laser_overlay, (x_start + ox, cy + oy), (x_end + ox, cy + oy), color, 6, cv2.LINE_AA)
+            cv2.circle(laser_overlay, (crit_x + ox, cy + oy), 18, color, -1, cv2.LINE_AA)
 
-        # Círculo brillante pulsante
-        pulse = int(8 + 4 * math.sin(time.time() * 8))
-        cv2.circle(frame, (crit_x, cy), pulse, (255, 200, 0), -1)
-        cv2.circle(frame, (crit_x, cy), pulse + 5, (255, 255, 100), 2)
-
-        # Etiqueta
-        cv2.putText(frame, "CRITICAL HIT", (crit_x - 60, cy - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 255), 2)
-
-        # Partículas de energía a lo largo de la línea
-        for _ in range(15):
-            x = random.randint(x_start, x_end)
-            y = cy + random.randint(-15, 15)
-            if 0 <= x < frame.shape[1] and 0 <= y < frame.shape[0]:
-                cv2.circle(frame, (x, y), 2, (255, 150, 50), -1)
+        # Blur masivo para crear el volumen lumínico
+        glow = cv2.GaussianBlur(laser_overlay, (31, 31), 0)
+        
+        # Núcleo blanco caliente incandescente
+        cv2.line(laser_overlay, (x_start, cy), (x_end, cy), (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.circle(laser_overlay, (crit_x, cy), 10, (255, 255, 255), -1, cv2.LINE_AA)
+        
+        # Composicion Additive Blending
+        frame[:] = cv2.addWeighted(frame, 1.0, glow, 2.0, 0)
+        frame[:] = cv2.add(frame, laser_overlay)
+        
+        # Interfaz Analítica del ratio
+        cv2.putText(frame, "7:3 CRITICAL TARGET LOCKED", (crit_x - 120, cy - 40),
+                    cv2.FONT_HERSHEY_PLAIN, 1.2, (255, 255, 255), 1, cv2.LINE_AA)
+        
+        # Rayos perpendiculares en la cruz del 7:3
+        t = time.time()
+        c_pulse = int(50 + 20 * math.sin(t*15))
+        cv2.line(frame, (crit_x, cy - c_pulse), (crit_x, cy + c_pulse), (200, 200, 255), 2, cv2.LINE_AA)
 
     # =========================================================================
     #  HIGURUMA HIROMI
@@ -402,79 +419,83 @@ class EffectGenerator:
 
     def draw_blue_attraction(self, frame, cx, cy, physics_system, fw, fh):
         """
-        Blue (Anime Quality): Núcleo de energía super denso.
-        Líneas de campo magnético atrayendo todo hacia adentro.
+        Blue (Anime Quality): Vórtice de Flow Field y densidad variable.
+        Las partículas forman colas de cometa marcando las trayectorias curvas.
         """
-        # Spawn partículas ambientales extra para demostrar la fuerza de succión
-        physics_system.spawn_ambient(fw, fh, count=20, color=(255, 250, 150)) # Más cian claro
+        physics_system.spawn_ambient(fw, fh, count=25, color=(255, 250, 150))
 
-        # Fuerza centrípeta extrema
-        physics_system.apply_attraction(cx, cy, strength=8.0)
-        physics_system.update(damping=0.90)
-        physics_system.render(frame, base_size=3)
-
-        # Dibujar lineas de campo magnético (espirales colapsando)
-        t = time.time() * 5
-        for spir in range(8):
-            pts = []
-            for r in range(10, 400, 20):
-                # Espiral logarítmica invertida
-                ang = r * 0.02 + t + (spir * math.pi / 4)
-                x = int(cx + math.cos(ang) * r)
-                y = int(cy + math.sin(ang) * r)
-                pts.append((x, y))
-            
-            for i in range(len(pts)-1):
-                p1, p2 = pts[i], pts[i+1]
-                if 0 <= p1[0] < fw and 0 <= p1[1] < fh:
-                    alpha = 1.0 - (i / len(pts))
-                    color = (int(255 * alpha), int(255 * alpha), int(100 * alpha))
-                    cv2.line(frame, p1, p2, color, max(1, int(3*alpha)))
-
-        # Núcleo 
-        pulse = int(25 + 10 * math.sin(time.time() * 15))
-        core_glow = np.zeros_like(frame)
-        cv2.circle(core_glow, (cx, cy), pulse, (255, 220, 100), -1)
-        cv2.circle(core_glow, (cx, cy), pulse + 15, (255, 150, 50), -1)
+        physics_system.apply_attraction(cx, cy, strength=9.0)
+        physics_system.update(damping=0.88)
         
-        # Efecto Black-hole Inverso (Centro negro purísimo rodeado de luz intensa)
-        glow = cv2.GaussianBlur(core_glow, (41, 41), 0)
-        frame[:] = cv2.addWeighted(frame, 1.0, glow, 1.5, 0)
-        cv2.circle(frame, (cx, cy), pulse - 5, (0, 0, 0), -1) # Núcleo oscuro super-denso
+        # Buffer para las trayectorias de absorción (flow field)
+        overlay = np.zeros_like(frame)
+        
+        for p in physics_system.particles:
+            px, py = int(p.x), int(p.y)
+            # Cola de velocidad (multiplicada inversamente al damping)
+            tail_x = int(p.x - p.vx * 3.5)
+            tail_y = int(p.y - p.vy * 3.5)
+            if 0 <= px < fw and 0 <= py < fh and 0 <= tail_x < fw and 0 <= tail_y < fh:
+                # Estelas finas anti-aliased
+                cv2.line(overlay, (tail_x, tail_y), (px, py), p.color, max(1, p.size), cv2.LINE_AA)
+
+        # Núcleo de Densidad Oscura rodeada de luz
+        pulse = int(35 + 10 * math.sin(time.time() * 15))
+        core_glow = np.zeros_like(frame)
+        cv2.circle(core_glow, (cx, cy), pulse, (255, 220, 100), -1, cv2.LINE_AA)
+        cv2.circle(core_glow, (cx, cy), pulse + 30, (255, 120, 0), -1, cv2.LINE_AA)
+        
+        glow = cv2.GaussianBlur(core_glow, (61, 61), 0)
+        frame[:] = cv2.addWeighted(frame, 1.0, glow, 2.5, 0)
+        frame[:] = cv2.add(frame, overlay)
+        cv2.circle(frame, (cx, cy), pulse - 10, (10, 5, 10), -1, cv2.LINE_AA) 
 
     def draw_red_repulsion(self, frame, cx, cy, physics_system, fw, fh):
         """
-        Red (Reversal): Onda de choque roja que empuja partículas hacia los bordes.
-        Invierte la polaridad del campo vectorial.
+        Red (Anime Quality): Onda de choque expansiva de energía carmesí.
+        Campo de flujo inverso masivo.
         """
-        # Spawn partículas desde el centro
-        for _ in range(5):
+        # Spawns explosivos en el centro
+        for _ in range(10):
             if len(physics_system.particles) < physics_system.max_particles:
                 from core.physics import Particle
                 p = Particle(
-                    x=cx + random.randint(-20, 20),
-                    y=cy + random.randint(-20, 20),
+                    x=cx + random.randint(-10, 10),
+                    y=cy + random.randint(-10, 10),
                     life=random.randint(40, 100),
-                    color=(50, 50, 255)  # Rojo en BGR
+                    color=(50, 50, 255)  # Rojo BGR
                 )
                 physics_system.particles.append(p)
 
-        # Aplicar fuerza centrífuga (repulsión)
-        physics_system.apply_repulsion(cx, cy, strength=4.0)
-        physics_system.update(damping=0.96)
-        physics_system.render(frame, base_size=3)
+        physics_system.apply_repulsion(cx, cy, strength=12.0)
+        physics_system.update(damping=0.98) # Muy poca fricción para que salgan volando
+        
+        overlay = np.zeros_like(frame)
+        
+        # Rayos de explosión de plasma
+        for p in physics_system.particles:
+            px, py = int(p.x), int(p.y)
+            tail_x = int(p.x - p.vx * 5)
+            tail_y = int(p.y - p.vy * 5)
+            if 0 <= px < fw and 0 <= py < fh and 0 <= tail_x < fw and 0 <= tail_y < fh:
+                cv2.line(overlay, (tail_x, tail_y), (px, py), p.color, max(1, p.size + 1), cv2.LINE_AA)
 
-        # Ondas de choque expansivas
+        # Capa estruendosa roja
+        core_glow = np.zeros_like(frame)
+        cv2.circle(core_glow, (cx, cy), 50, (30, 30, 255), -1, cv2.LINE_AA)
+        glow = cv2.GaussianBlur(core_glow, (81, 81), 0)
+        
+        # Anillos destructivos
         t = time.time()
-        for wave in range(3):
-            r = int((((t * 2 + wave) % 1.0) * 200))
-            alpha = max(0, 1.0 - r / 200)
-            color = (0, int(50 * alpha), int(255 * alpha))
-            cv2.circle(frame, (cx, cy), r, color, 1)
-
-        # Núcleo rojo
-        cv2.circle(frame, (cx, cy), 8, (0, 0, 255), -1)
-        cv2.circle(frame, (cx, cy), 14, (0, 80, 255), 2)
+        for ring in range(3):
+            r = int(((t * 4 + ring) % 1.0) * 800)
+            alfa = max(0, 1.0 - r / 800)
+            color = (0, int(30 * alfa), int(255 * alfa))
+            cv2.circle(overlay, (cx, cy), r, color, int(2+6*alfa), cv2.LINE_AA)
+            
+        frame[:] = cv2.addWeighted(frame, 1.0, glow, 3.0, 0)
+        frame[:] = cv2.add(frame, overlay)
+        cv2.circle(frame, (cx, cy), 20, (200, 200, 255), -1, cv2.LINE_AA)
 
     def draw_hollow_purple(self, frame, cx, cy, physics_system, fw, fh):
         """

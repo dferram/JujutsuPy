@@ -11,6 +11,7 @@ import cvzone
 import numpy as np
 import math
 import random
+import time
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -76,7 +77,7 @@ class CinematicRenderer:
         return np.zeros((self.H, self.W, 3), dtype=np.uint8)
 
     def draw_background(self, canvas):
-        """Actualiza y dibuja las particulas del fondo cosmico."""
+        """Actualiza y dibuja las particulas del fondo cosmico con antialiasing."""
         for p in self.bg_particles:
             p[0] += p[2]  # Update X
             p[1] += p[3]  # Update Y
@@ -92,9 +93,34 @@ class CinematicRenderer:
             c = p[5]
             
             if p[6] == 'circle':
-                cv2.circle(canvas, (px, py), s, c, -1)
+                cv2.circle(canvas, (px, py), s, c, -1, cv2.LINE_AA)
             else:
-                cv2.rectangle(canvas, (px, py), (px + s, py + s), c, -1)
+                cv2.rectangle(canvas, (px, py), (px + s, py + s), c, -1, cv2.LINE_AA)
+
+    def draw_glass_panel(self, canvas, x, y, w, h, alpha=0.25, color=(15, 10, 25), border_color=(80, 220, 255)):
+        """Dibuja un panel translucido estilo Vidrio Esmerilado (Frosted Glass / MAPPA UI)."""
+        # Evitar recortes fuera de limites
+        if y+h > self.H or x+w > self.W or x < 0 or y < 0: return
+
+        overlay = canvas[y:y+h, x:x+w].copy()
+        cv2.rectangle(overlay, (0, 0), (w, h), color, -1)
+        
+        # Desenfoque masivo para el efecto "Frosted"
+        overlay = cv2.GaussianBlur(overlay, (45, 45), 0)
+        cv2.addWeighted(overlay, alpha, canvas[y:y+h, x:x+w], 1 - alpha, 0, canvas[y:y+h, x:x+w])
+        
+        # Borde exterior fino e iluminado
+        cv2.rectangle(canvas, (x, y), (x + w, y + h), border_color, 1, cv2.LINE_AA)
+        
+        # Acentos geometricos en esquinas (estilo militar/sci-fi)
+        leng = 15
+        thk = 2
+        # Arriba-Izq
+        cv2.line(canvas, (x, y), (x + leng, y), border_color, thk, cv2.LINE_AA)
+        cv2.line(canvas, (x, y), (x, y + leng), border_color, thk, cv2.LINE_AA)
+        # Abajo-Der
+        cv2.line(canvas, (x + w, y + h), (x + w - leng, y + h), border_color, thk, cv2.LINE_AA)
+        cv2.line(canvas, (x + w, y + h), (x + w, y + h - leng), border_color, thk, cv2.LINE_AA)
 
     def draw_webcam_inset(self, canvas, cam_frame, landmarks_list):
         """
@@ -117,24 +143,32 @@ class CinematicRenderer:
         # Colocamos el inset en el canvas
         canvas[self.inset_y : self.inset_y + self.inset_h, self.inset_x : self.inset_x + self.inset_w] = inset_bgr
         
-        # Dibujar un borde futurista limpio
-        cvzone.putTextRect(canvas, 'LIVE FEED', (self.inset_x, self.inset_y - 10), 
-                           scale=1, thickness=1, colorT=(255, 255, 255), colorR=(10, 10, 10), 
+        # Dibujar un borde futurista y escaner dinamico
+        cvzone.putTextRect(canvas, 'LIVE SENSOR HUB', (self.inset_x, self.inset_y - 12), 
+                           scale=1.2, thickness=1, colorT=(255, 255, 255), colorR=(15, 10, 25), 
                            font=cv2.FONT_HERSHEY_PLAIN, offset=5)
         
         cv2.rectangle(canvas, (self.inset_x, self.inset_y), 
                       (self.inset_x + self.inset_w, self.inset_y + self.inset_h), 
-                      (255, 255, 100), 1)
+                      (255, 255, 100), 1, cv2.LINE_AA)
+
+        # Animacion de Escaner Laser
+        t = time.time()
+        scan_y = int(((math.sin(t * 3) + 1) / 2) * self.inset_h)
+        scan_line_y = self.inset_y + scan_y
+        cv2.line(canvas, (self.inset_x, scan_line_y), (self.inset_x + self.inset_w, scan_line_y), (100, 255, 200), 1, cv2.LINE_AA)
+        # Glow del escaner
+        cv2.circle(canvas, (self.inset_x, scan_line_y), 3, (200, 255, 255), -1, cv2.LINE_AA)
+        cv2.circle(canvas, (self.inset_x + self.inset_w, scan_line_y), 3, (200, 255, 255), -1, cv2.LINE_AA)
 
     def _draw_neon_hand(self, img, landmarks, w, h):
-        """Lineas neon puras, estilo sci-fi ultra fino."""
+        """Lineas neon puras ultra-finas sin alias."""
         points = {}
         for idx, lm in enumerate(landmarks):
             px, py = int(lm.x * w), int(lm.y * h)
             points[idx] = (px, py)
-            # Nodos: cian brillante central pequeño, glow celeste alrededor
-            cv2.circle(img, (px, py), 2, (255, 255, 255), -1) 
-            cv2.circle(img, (px, py), 5, (255, 255, 50), 1) # Cyan glow
+            cv2.circle(img, (px, py), 2, (255, 255, 255), -1, cv2.LINE_AA) 
+            cv2.circle(img, (px, py), 5, (255, 255, 50), 1, cv2.LINE_AA) 
 
         connections = [
             (0, 1), (1, 2), (2, 3), (3, 4),
@@ -147,38 +181,90 @@ class CinematicRenderer:
         
         for c1, c2 in connections:
             if c1 in points and c2 in points:
-                # Linea superfina neon cian
-                cv2.line(img, points[c1], points[c2], (255, 200, 50), 1)
+                cv2.line(img, points[c1], points[c2], (255, 200, 50), 1, cv2.LINE_AA)
                 
     def draw_professional_hud(self, canvas, energy_system, fps, tech_name=None, character=None, is_active=False):
         """Dibuja todo el overlay futurista sobre el canvas 1080p."""
+
+        # --- 0. Panel Compendio Lateral (Glass Morphism) ---
+        panel_w, panel_h = 360, 710
+        px, py = 40, 45  # Subido para evitar superposición con cámara
+        self.draw_glass_panel(canvas, px, py, panel_w, panel_h, alpha=0.35)
+        
+        cv2.putText(canvas, "SORCERER DB // REGISTERED SEALS", (px + 20, py + 30), cv2.FONT_HERSHEY_PLAIN, 1.1, (200, 220, 255), 1, cv2.LINE_AA)
+        cv2.line(canvas, (px + 20, py + 40), (px + panel_w - 20, py + 40), (100, 150, 255), 1, cv2.LINE_AA)
+
+        # Database index mapping (con instrucciones de sellos)
+        y_offset = py + 75
+        db_entries = [
+            ("SATORU GOJO", [
+                "Infinite Void (Fingers Crossed)", 
+                "Blue (Index/Middle Point)", 
+                "Red (Thumb/Index/Middle)", 
+                "Hollow Purple (Pinch Thrust)"
+            ], (255, 200, 100)),
+            ("MEGUMI FUSHIGURO", [
+                "Divine Dogs (Palms Joined)", 
+                "Nue (Crossed Wrists)",
+                "Toad (Double Fists)",
+                "Mahoraga (Fists Stacked)", 
+                "Domain (Middle Fingers Cross)"
+            ], (255, 100, 255)),
+            ("KENTO NANAMI", [
+                "Overtime Aura (Fist Hold 2s)", 
+                "Ratio 7:3 (Knife Hand Strike)"
+            ], (50, 200, 255)),
+            ("HIROMI HIGURUMA", [
+                "Deadly Sentencing (Gavel Hit)"
+            ], (50, 230, 255)),
+            ("YUTA OKKOTSU", [
+                "Rika Manifest (Ring Finger Kiss)", 
+                "Mutual Love Domain (Heart Sign)"
+            ], (230, 230, 250))
+        ]
+
+        for sorcerer, skills, col in db_entries:
+            # Header del hechicero
+            cv2.putText(canvas, f"[{sorcerer}]", (px + 15, y_offset), cv2.FONT_HERSHEY_PLAIN, 1.2, col, 1, cv2.LINE_AA)
+            y_offset += 26
+            for sk in skills:
+                # Iconito tracker
+                cv2.circle(canvas, (px + 25, y_offset - 4), 2, col, -1, cv2.LINE_AA)
+                cv2.putText(canvas, sk, (px + 35, y_offset), cv2.FONT_HERSHEY_PLAIN, 1.0, (220, 220, 220), 1, cv2.LINE_AA)
+                y_offset += 22
+            y_offset += 15
+
         # --- 1. Top Logo (Kanji) ---
         title = "呪術廻戦"
-        sub = "JUJUTSU KAISEN VISION ENGINE"
+        sub = "JUJUTSU KAISEN VISION ENGINE V3.0"
         
         if self.jp_font:
             try:
-                # Pil Magic para Kanji
                 canvas_pil = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
                 draw = ImageDraw.Draw(canvas_pil)
-                # Sombra
                 draw.text((self.W//2 - 148, 42), title, font=self.jp_font, fill=(0, 0, 0))
-                # Texto
                 draw.text((self.W//2 - 150, 40), title, font=self.jp_font, fill=(255, 255, 255))
                 canvas[:] = cv2.cvtColor(np.array(canvas_pil), cv2.COLOR_RGB2BGR)
             except Exception:
                 pass
         
-        cv2.putText(canvas, sub, (self.W//2 - 160, 130), cv2.FONT_HERSHEY_PLAIN, 1.3, (200, 200, 200), 1)
+        cv2.putText(canvas, sub, (self.W//2 - 190, 130), cv2.FONT_HERSHEY_PLAIN, 1.3, (200, 220, 255), 1, cv2.LINE_AA)
+        cv2.line(canvas, (self.W//2 - 200, 140), (self.W//2 + 200, 140), (255, 255, 255), 1, cv2.LINE_AA)
         
-        # --- 2. Tech Data Overlays ---
-        cvzone.putTextRect(canvas, f'FPS: {int(fps)}', (self.W - 150, 40), 
-                           scale=1.5, thickness=1, colorT=(0, 255, 0), colorR=(0, 0, 0), font=cv2.FONT_HERSHEY_PLAIN)
+        # --- 2. Tech Data Overlays & Confirmations ---
+        cvzone.putTextRect(canvas, f'FPS {int(fps)} // 1080P', (self.W - 200, 40), 
+                           scale=1.2, thickness=1, colorT=(0, 250, 150), colorR=(15, 10, 25), font=cv2.FONT_HERSHEY_PLAIN)
                            
         state_color = (100, 255, 100) if tech_name else (200, 200, 200)
-        state_text = 'HAND GESTURE: CONFIRMED' if tech_name else 'HAND GESTURE: SCANNING...'
-        cvzone.putTextRect(canvas, state_text, (self.W - 350, self.H - 50), 
-                           scale=1.2, thickness=1, colorT=state_color, colorR=(10, 10, 10), font=cv2.FONT_HERSHEY_PLAIN)
+        state_text = 'TARGET ACQUIRED: GESTURE LOCKED' if tech_name else 'AWAITING HAND SIGNATURE...'
+        
+        # Pulsing text en el HUD derecho
+        t = time.time()
+        pulse_alpha = abs(math.sin(t * 5)) if tech_name else 1.0
+        final_color = (int(state_color[0]*pulse_alpha), int(state_color[1]*pulse_alpha), int(state_color[2]*pulse_alpha))
+        
+        cvzone.putTextRect(canvas, state_text, (self.W - 420, self.H - 50), 
+                           scale=1.2, thickness=1, colorT=final_color, colorR=(15, 10, 25), font=cv2.FONT_HERSHEY_PLAIN)
                            
         # --- 3. Cursed Energy Bar (Sci-Fi look) ---
         bar_w = 400

@@ -17,9 +17,9 @@ import math
 
 class Particle:
     """Partícula individual con posición y velocidad."""
-    __slots__ = ['x', 'y', 'vx', 'vy', 'life', 'max_life', 'color']
+    __slots__ = ['x', 'y', 'vx', 'vy', 'life', 'max_life', 'color', 'size']
 
-    def __init__(self, x, y, vx=0.0, vy=0.0, life=120, color=(255, 200, 100)):
+    def __init__(self, x, y, vx=0.0, vy=0.0, life=120, color=(255, 200, 100), size=2):
         self.x = x
         self.y = y
         self.vx = vx
@@ -27,6 +27,7 @@ class Particle:
         self.life = life
         self.max_life = life
         self.color = color
+        self.size = size
 
 
 class PhysicsParticleSystem:
