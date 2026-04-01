@@ -218,25 +218,7 @@ def detect_ratio(hand):
     return max_dist < 0.12
 
 
-# =============================================================================
-#  HIGURUMA HIROMI — Deadly Sentencing (1 técnica)
-# =============================================================================
-
-def detect_gavel_strike(h1, h2):
-    """
-    Gavel Strike: Puño derecho golpeando la palma izquierda.
-    Firma: Muñeca de h1 (0) cerca del centro de palma de h2 (9) o viceversa (< 0.07).
-    """
-    w1 = landmarks_to_point(h1, 0)
-    p2 = landmarks_to_point(h2, 9)
-    w2 = landmarks_to_point(h2, 0)
-    p1 = landmarks_to_point(h1, 9)
-
-    d1 = calculate_euclidean_distance(w1, p2)
-    d2 = calculate_euclidean_distance(w2, p1)
-
-    # Cualquiera de las dos manos puede ser el puño
-    return d1 < 0.07 or d2 < 0.07
+# REMOVED HIGURUMA
 
 
 # =============================================================================
@@ -320,55 +302,7 @@ def detect_hollow_purple(hand):
     return gun_pose_1 or gun_pose_2
 
 
-# =============================================================================
-#  YUTA OKKOTSU — Pure Love (2 técnicas)
-# =============================================================================
-
-def detect_rika(hand):
-    """
-    Rika Manifestation: Besar el anillo — pulgar (4) cerca de la boca.
-    Firma: Thumb tip (4) en zona Y < 0.35 (parte alta de la cámara, zona de rostro).
-    Se asume que el usuario tiene la mano izquierda cerca de la cara.
-    """
-    thumb_tip = hand.landmark[4]
-    index_tip = hand.landmark[8]
-
-    # Mano cerca de la cara (zona alta)
-    if thumb_tip.y > 0.40:
-        return False
-
-    # Pulgar e índice se tocan (simulación de besar el anillo)
-    dist = calculate_euclidean_distance(
-        (thumb_tip.x, thumb_tip.y),
-        (index_tip.x, index_tip.y)
-    )
-
-    return dist < 0.05
-
-
-def detect_domain_yuta(h1, h2):
-    """
-    Domain Expansion (Authentic Mutual Love): Manos entrelazadas complejas
-    frente al rostro, índices cruzados apuntando arriba.
-    Firma: Palmas cercanas + índices extendidos + cruzados en X + posición alta.
-    """
-    p1, p2 = landmarks_to_point(h1, 9), landmarks_to_point(h2, 9)
-    if calculate_euclidean_distance(p1, p2) > 0.15:
-        return False
-
-    # Índices extendidos
-    if not (is_finger_extended(h1, 8, 6) and is_finger_extended(h2, 8, 6)):
-        return False
-
-    # Índices cruzados: las X de los tips deben invertirse respecto a sus bases
-    i1_tip = h1.landmark[8]
-    i2_tip = h2.landmark[8]
-
-    # Posición alta (frente al rostro)
-    if i1_tip.y > 0.45 or i2_tip.y > 0.45:
-        return False
-
-    return True
+# REMOVED YUTA
 
 
 # =============================================================================
@@ -385,18 +319,12 @@ TECHNIQUE_INFO = {
     # Megumi
     "divine_dogs":    ("DIVINE DOGS: KEN", "Megumi"),
     "nue":            ("NUE: THUNDERBIRD", "Megumi"),
-    "toad":           ("TOAD: GAMA", "Megumi"),
     "max_elephant":   ("MAX ELEPHANT", "Megumi"),
     "rabbit_escape":  ("RABBIT ESCAPE", "Megumi"),
     "mahoraga":       ("MAHORAGA: EIGHT-HANDLED SWORD", "Megumi"),
     # Nanami
     "overtime":       ("OVERTIME MODE", "Nanami"),
     "ratio":          ("RATIO TECHNIQUE: 7:3", "Nanami"),
-    # Higuruma
-    "gavel_strike":   ("GAVEL STRIKE: DEADLY SENTENCING", "Higuruma"),
-    # Yuta
-    "rika":           ("RIKA: MANIFESTATION", "Yuta"),
-    "domain_yuta":    ("DOMAIN: AUTHENTIC MUTUAL LOVE", "Yuta"),
 }
 
 
@@ -420,15 +348,6 @@ def detect_active_technique(hands_list, handedness_list=None):
         # --- Técnicas de 2 manos (orden de prioridad) ---
         if detect_mahoraga(h1, h2):
             return "mahoraga", {"h1": h1, "h2": h2}
-
-        if detect_gavel_strike(h1, h2):
-            return "gavel_strike", {"h1": h1, "h2": h2}
-
-        if detect_domain_yuta(h1, h2):
-            return "domain_yuta", {"h1": h1, "h2": h2}
-
-        if detect_toad(h1, h2):
-            return "toad", {"h1": h1, "h2": h2}
 
         if detect_max_elephant(h1, h2):
             return "max_elephant", {"h1": h1, "h2": h2}
@@ -456,9 +375,6 @@ def detect_active_technique(hands_list, handedness_list=None):
 
         # --- Técnicas de 1 mano (evaluar cada mano) ---
         for hand in hands_list:
-            if detect_rika(hand):
-                return "rika", {"hand": hand}
-
             if detect_overtime(hand):
                 return "overtime", {"hand": hand}
 

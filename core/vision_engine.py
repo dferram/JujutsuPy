@@ -12,6 +12,8 @@ import cv2
 import mediapipe as mp
 import time
 import os
+import random
+import numpy as np
 
 from utils.math_helpers import get_centroid, get_single_hand_center
 from core.effects import EffectGenerator
@@ -53,6 +55,16 @@ class LandmarkSmoother:
             del self.history[k]
                 
         return smoothed_hands
+
+
+def apply_screen_shake(frame, intensity=14):
+    """Aplicar traslación sísmica brutal estilo cámara anime."""
+    h, w = frame.shape[:2]
+    dx = random.randint(-intensity, intensity)
+    dy = random.randint(-intensity, intensity)
+    # Rellenar bordes de negro (se ve genial, acentúa el impacto)
+    M = np.float32([[1, 0, dx], [0, 1, dy]])
+    return cv2.warpAffine(frame, M, (w, h))
 
 
 # Adaptador: la nueva API retorna NormalizedLandmark objects
@@ -137,10 +149,6 @@ class CursedVision:
             cx, cy = get_centroid(hand_data["h1"], hand_data["h2"], fw, fh, offset_y=-120)
             self.effect_gen.draw_nue(frame, cx, cy)
 
-        elif technique_id == "toad":
-            cx, cy = get_centroid(hand_data["h1"], hand_data["h2"], fw, fh, offset_y=0)
-            self.effect_gen.draw_toad(frame, cx, cy, fw, fh)
-
         elif technique_id == "max_elephant":
             cx, cy = get_centroid(hand_data["h1"], hand_data["h2"], fw, fh, offset_y=0)
             self.effect_gen.draw_max_elephant(frame, cx, cy, fw)
@@ -160,20 +168,6 @@ class CursedVision:
         elif technique_id == "ratio":
             cx, cy = get_single_hand_center(hand_data["hand"], fw, fh)
             self.effect_gen.draw_ratio_line(frame, cx, cy)
-
-        # --- HIGURUMA ---
-        elif technique_id == "gavel_strike":
-            self.effect_gen.draw_gavel_impact(frame, fw, fh)
-
-        # --- YUTA ---
-        elif technique_id == "rika":
-            cx, cy = get_single_hand_center(hand_data["hand"], fw, fh)
-            self.effect_gen.draw_rika(frame, cx, cy - 100)
-
-        elif technique_id == "domain_yuta":
-            self.effect_gen.draw_sword_rain(frame, fw, fh)
-            cx, cy = get_centroid(hand_data["h1"], hand_data["h2"], fw, fh, offset_y=-60)
-            self.effect_gen.draw_rika(frame, cx, cy, scale=120)
 
         # --- GOJO (Hardcoded a pantalla completa en el centro) ---
         elif technique_id == "infinite_void":
@@ -197,9 +191,16 @@ class CursedVision:
         print("Iniciando JujutsuPy Cinematic Vision Engine...")
         print("Pantalla completa activa. Presiona 'q' para salir.\n")
 
-        # Configurar pantalla completa
-        cv2.namedWindow("JujutsuPy Vision Engine", cv2.WND_PROP_FULLSCREEN)
-        cv2.setWindowProperty("JujutsuPy Vision Engine", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        # Configurar pantalla completa y Mouse Hooks interactivos
+        window_name = "JujutsuPy Vision Engine"
+        cv2.namedWindow(window_name, cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        
+        def _mouse_callback(event, x, y, flags, param):
+            if event == cv2.EVENT_LBUTTONDOWN:
+                self.renderer.check_click(x, y)
+
+        cv2.setMouseCallback(window_name, _mouse_callback)
 
         prev_time = time.time()
 
@@ -258,13 +259,25 @@ class CursedVision:
                     self.current_technique = None
                 self.energy.update(is_active=False)
 
+            # Llama Ambiental Azul en modo Idle (Si no hay técnica activa pero hay mano)
+            if not is_active and len(hands_list) > 0 and self.energy.has_energy():
+                try:
+                    idle_cx, idle_cy = get_single_hand_center(hands_list[0], cw, ch)
+                    self.effect_gen.draw_cursed_aura(canvas, idle_cx, idle_cy, is_overtime=False)
+                except Exception:
+                    pass
+
             # Dibujar la camara en la esquina (el inset se encarga internamente de dibujar los neones de la mano)
             self.renderer.draw_webcam_inset(canvas, cam_frame, hands_list)
 
             # Dibujar el HUD cinematográfico
             self.renderer.draw_professional_hud(canvas, self.energy, fps, tech_name, character, is_active)
 
-            cv2.imshow("JujutsuPy Vision Engine", canvas)
+            # Terremoto / Screen Shake Cinematic
+            if is_active:
+                canvas = apply_screen_shake(canvas, intensity=10)
+
+            cv2.imshow(window_name, canvas)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 

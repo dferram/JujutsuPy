@@ -58,6 +58,82 @@ class EffectGenerator:
         ]
 
     # =========================================================================
+    #  SUPER BLOOM VOLUMETRIC LIGHTING SHADER
+    # =========================================================================
+
+    def _apply_super_bloom(self, frame, layer, intensity=2.0):
+        glow1 = cv2.GaussianBlur(layer, (15, 15), 0)
+        glow2 = cv2.GaussianBlur(layer, (45, 45), 0)
+        glow3 = cv2.GaussianBlur(layer, (91, 91), 0)
+        
+        b = cv2.addWeighted(glow1, 1.0, glow2, 0.7, 0)
+        b = cv2.addWeighted(b, 1.0, glow3, 0.4, 0)
+        
+        cv2.addWeighted(frame, 1.0, b, intensity, 0, frame)
+        cv2.add(frame, layer, frame)
+
+    # =========================================================================
+    #  VECTOR FLAME SHADERS (Procedural Anime Aura)
+    # =========================================================================
+    def _generate_flame_polygon(self, cx, cy, base_radius, height, t, noise_scale, num_points=80):
+        points = []
+        for i in range(num_points):
+            angle = (i / num_points) * 2 * math.pi
+            r = base_radius
+            
+            dx = math.cos(angle)
+            dy = math.sin(angle)
+            
+            # Flame stretch: pull it UP (y-axis negative in OpenCV)
+            if dy < 0:
+                r += abs(dy) * height
+                
+            # Complejidad de Frecuencias de Ruido
+            noise = math.sin(angle * 12 + t * 10) * noise_scale
+            noise += math.sin(angle * 25 - t * 15) * (noise_scale * 0.5)
+            # Picos afilados en la cima
+            if dy < -0.2:
+                noise += math.cos(angle * 5 + t * 20) * (noise_scale * 0.8)
+
+            r += noise
+            r = max(5, r)
+            
+            points.append([int(cx + dx * r), int(cy + dy * r)])
+            
+        return np.array(points, np.int32)
+        
+    def draw_cursed_aura(self, frame, cx, cy, is_overtime=False):
+        """Genera flamas vectoriales 2D simulando dibujo tradicional Anime."""
+        t = time.time()
+        overlay = np.zeros_like(frame)
+        
+        if is_overtime:
+            c_outer = (15, 15, 15) # Negro (Corbata Nanami)
+            c_inner = (0, 200, 255) # Amarillo Puro
+        else:
+            c_outer = (35, 15, 15) # BGR: Indigo/Azul Oscuro Profundo
+            c_inner = (240, 220, 50) # Cian Brillante
+            
+        # 1. Capa Exterior (Sombra densa / Outer Shell)
+        pts_outer = self._generate_flame_polygon(cx, cy, 120, 280, t, 35)
+        cv2.fillPoly(overlay, [pts_outer], c_outer, cv2.LINE_AA)
+        
+        # Dibujar picos y astillas de llama que se desprenden
+        for i in range(6):
+            wx = cx + random.randint(-90, 90)
+            wy = cy - random.randint(100, 320)
+            s = random.randint(3, 10)
+            y_offset = (t * 60 + i * 20) % 180
+            tri = np.array([[wx, wy-y_offset], [wx-s, wy-y_offset+s*3], [wx+s, wy-y_offset+s*3]], np.int32)
+            cv2.fillPoly(overlay, [tri], c_outer, cv2.LINE_AA)
+
+        # 2. Capa Interior (Núcleo Puro / Inner Core)
+        pts_inner = self._generate_flame_polygon(cx, cy, 70, 200, t, 20)
+        cv2.fillPoly(overlay, [pts_inner], c_inner, cv2.LINE_AA)
+
+        self._apply_super_bloom(frame, overlay, intensity=1.8)
+
+    # =========================================================================
     #  UTILIDAD: Interpolación + Jitter (Reutilizable)
     # =========================================================================
 
@@ -264,34 +340,7 @@ class EffectGenerator:
 
     def draw_overtime_aura(self, frame, cx, cy, scale=180):
         """Fuego de Energía Maldita estilo corbata de Nanami (Amarillo y Negro)."""
-        t = time.time()
-        overlay = np.zeros_like(frame)
-        
-        num_particles = 1500
-        # Distribuir alrededor de la mano
-        angles = np.random.uniform(0, 2 * math.pi, num_particles)
-        # Fuego fluyendo intensamente HACIA ARRIBA (Y negativa)
-        radii = np.random.uniform(0, scale, num_particles)
-        
-        x_vals = cx + np.cos(angles) * radii
-        y_vals = cy + np.sin(angles) * radii - np.random.uniform(0, scale*2.5, num_particles)
-        
-        # Ruido y vibración de fuego
-        noise_x = np.sin(t * 12 + y_vals * 0.05) * 20
-        
-        # 20% Puntos Negros (Corbata Nanami), 80% Amarillo/Naranja fuego
-        is_black = np.random.random(num_particles) < 0.20
-        
-        for px, py, black in zip(x_vals + noise_x, y_vals, is_black):
-            if 0 <= px < frame.shape[1] and 0 <= py < frame.shape[0]:
-                if black:
-                    cv2.rectangle(overlay, (int(px), int(py)), (int(px)+4, int(py)+4), (10, 10, 10), -1, cv2.LINE_AA)
-                else:
-                    cv2.rectangle(overlay, (int(px), int(py)), (int(px)+3, int(py)+3), (0, 200, 255), -1, cv2.LINE_AA)
-                    
-        glow = cv2.GaussianBlur(overlay, (31, 31), 0)
-        cv2.addWeighted(frame, 1.0, glow, 2.0, 0, frame)
-        cv2.add(frame, overlay, frame)
+        self.draw_cursed_aura(frame, cx, cy, is_overtime=True)
         
         # Reloj digital tech en la parte superior derecha
         clock_str = time.strftime("%H:%M:%S")
@@ -564,44 +613,52 @@ class EffectGenerator:
         cv2.circle(frame, (cx, cy), 20, (200, 200, 255), -1, cv2.LINE_AA)
 
     def draw_hollow_purple(self, frame, cx, cy, physics_system, fw, fh):
-        """
-        Hollow Purple: Fusión de Blue + Red. Esfera morada eléctrica
-        con estela de 'borrado de píxeles'.
-        """
-        # Mantener la estela (últimas N posiciones del centro)
-        self._purple_trail.append((cx, cy))
-        if len(self._purple_trail) > 30:
-            self._purple_trail.pop(0)
+        """V5 Hollow Purple: Esfera abstracta púrpura con ruido iterativo GIGANTE."""
+        overlay = np.zeros_like(frame)
+        
+        # 1. Background abstract square particles (polvo estelar cuadriculado de la referencia)
+        for _ in range(120):
+            x = random.randint(0, fw-1)
+            y = random.randint(0, fh-1)
+            # Evitar dibujar dentro de la bola para darle limpieza al sol
+            if math.hypot(x - cx, y - cy) > 280:
+                s = random.choice([3, 5, 8, 14])
+                c = random.choice([(255, 255, 255), (200, 200, 255), (255, 200, 255)])
+                cv2.rectangle(overlay, (x, y), (x+s, y+s), c, -1, cv2.LINE_AA)
 
-        # Dibujar estela de borrado (píxeles negros erosionados)
-        for i, (tx, ty) in enumerate(self._purple_trail):
-            alpha = i / len(self._purple_trail)
-            r = int(20 * (1.0 - alpha))
-            if 0 <= tx < fw and 0 <= ty < fh:
-                cv2.circle(frame, (tx, ty), r, (10, 0, 10), -1)  # "Borrado"
+        radius = 260
+        # 2. Halo GIGANTE púrpura en el fondo (Outer Glow)
+        cv2.circle(overlay, (cx, cy), radius + 60, (255, 80, 255), -1, cv2.LINE_AA)
+        
+        # 3. Núcleo Súper Brillante Blanco (Inner Core)
+        cv2.circle(overlay, (cx, cy), radius, (255, 240, 255), -1, cv2.LINE_AA)
+        
+        # Inyectar iluminación volumétrica
+        self._apply_super_bloom(frame, overlay, intensity=1.5)
 
-        # Partículas rojas y azules fusionándose
-        for _ in range(15):
-            angle = random.uniform(0, 2 * math.pi)
-            r = random.uniform(20, 60)
-            px = int(cx + math.cos(angle) * r)
-            py = int(cy + math.sin(angle) * r)
-            if 0 <= px < fw and 0 <= py < fh:
-                if random.random() < 0.5:
-                    cv2.circle(frame, (px, py), 2, (255, 80, 30), -1)   # Azul
-                else:
-                    cv2.circle(frame, (px, py), 2, (50, 30, 255), -1)   # Rojo
-
-        # Esfera púrpura central (eléctrica y pulsante)
-        pulse = int(18 + 8 * math.sin(time.time() * 10))
-        cv2.circle(frame, (cx, cy), pulse, (200, 0, 200), -1)
-        cv2.circle(frame, (cx, cy), pulse + 5, (255, 50, 255), 2)
-        cv2.circle(frame, (cx, cy), pulse + 12, (220, 100, 255), 1)
-
-        # Chispas eléctricas
-        for _ in range(6):
-            x1 = cx + random.randint(-pulse, pulse)
-            y1 = cy + random.randint(-pulse, pulse)
-            x2 = x1 + random.randint(-20, 20)
-            y2 = y1 + random.randint(-20, 20)
-            cv2.line(frame, (x1, y1), (x2, y2), (255, 150, 255), 1)
+        # 4. Textura dinámica de Ruido (CGI Grain Shader para emular el interior abstracto)
+        noise_size = radius * 2
+        # Generación aleatoria computacional de NumPy iterativa
+        noise_r = np.random.randint(150, 255, (noise_size, noise_size), dtype=np.uint8)
+        noise_g = np.random.randint(50, 150, (noise_size, noise_size), dtype=np.uint8)
+        noise_b = np.random.randint(200, 255, (noise_size, noise_size), dtype=np.uint8)
+        noise_img = cv2.merge([noise_b, noise_g, noise_r]) # BGR 
+        
+        # Máscara circular dura para el ruido
+        mask = np.zeros((noise_size, noise_size), dtype=np.uint8)
+        cv2.circle(mask, (radius, radius), radius, 255, -1)
+        noisy_circle = cv2.bitwise_and(noise_img, noise_img, mask=mask)
+        
+        # Superponer ruido procedural seguro sin desbordar la RAM de video
+        y1, y2 = max(0, cy - radius), min(fh, cy + radius)
+        x1, x2 = max(0, cx - radius), min(fw, cx + radius)
+        
+        ny1 = radius - (cy - y1)
+        ny2 = radius + (y2 - cy)
+        nx1 = radius - (cx - x1)
+        nx2 = radius + (x2 - cx)
+        
+        if y2 > y1 and x2 > x1:
+            roi = frame[y1:y2, x1:x2]
+            noise_roi = noisy_circle[ny1:ny2, nx1:nx2]
+            cv2.addWeighted(roi, 1.0, noise_roi, 0.7, 0, roi)

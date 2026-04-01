@@ -26,6 +26,10 @@ class CinematicRenderer:
         self.inset_h = 270
         self.inset_x = 40
         self.inset_y = self.H - self.inset_h - 40
+        
+        # Interactive Tutorial HUD
+        self.clickable_regions = []
+        self.active_tutorial = None
 
         # Cargar fuente japonesa para poder dibujar "呪術廻戦" nativamente
         self.jp_font = None
@@ -206,33 +210,37 @@ class CinematicRenderer:
             ("MEGUMI FUSHIGURO", [
                 "Divine Dogs (Palms Joined & Thumbs Up)", 
                 "Nue (Crossed Wrists)",
-                "Toad (Double Fists)",
-                "Mahoraga (Fists Stacked)", 
-                "Domain (Middle Fingers Cross)"
+                "Mahoraga (Fists Stacked)"
             ], (255, 100, 255)),
             ("KENTO NANAMI", [
                 "Overtime Aura (Fist Hold 2s)", 
                 "Ratio 7:3 (Knife Hand Strike)"
-            ], (50, 200, 255)),
-            ("HIROMI HIGURUMA", [
-                "Deadly Sentencing (Gavel Hit)"
-            ], (50, 230, 255)),
-            ("YUTA OKKOTSU", [
-                "Rika Manifest (Ring Finger Kiss)", 
-                "Mutual Love Domain (Heart Sign)"
-            ], (230, 230, 250))
+            ], (50, 200, 255))
         ]
+
+        self.clickable_regions = []
 
         for sorcerer, skills, col in db_entries:
             # Header del hechicero
             cv2.putText(canvas, f"[{sorcerer}]", (px + 15, y_offset), cv2.FONT_HERSHEY_PLAIN, 1.2, col, 1, cv2.LINE_AA)
             y_offset += 26
             for sk in skills:
+                # Store hitboxes
+                self.clickable_regions.append(((px, y_offset - 15, 300, 20), sk))
+                
                 # Iconito tracker
                 cv2.circle(canvas, (px + 25, y_offset - 4), 2, col, -1, cv2.LINE_AA)
                 cv2.putText(canvas, sk, (px + 35, y_offset), cv2.FONT_HERSHEY_PLAIN, 1.0, (220, 220, 220), 1, cv2.LINE_AA)
+                
+                # Draw subtle bounding box hover/click zone visual aid
+                if self.active_tutorial == sk:
+                    cv2.rectangle(canvas, (px, y_offset - 18), (px + 310, y_offset + 5), (100, 255, 100), 1, cv2.LINE_AA)
+                
                 y_offset += 22
             y_offset += 15
+
+        # Dibuja el modal de tutorial holografico si esta activo
+        self.draw_tutorial_overlay(canvas)
 
         # --- 1. Top Logo (Kanji) ---
         title = "呪術廻戦"
@@ -276,3 +284,50 @@ class CinematicRenderer:
             # Glow
             cv2.putText(canvas, tech_name, (tx, ty), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 200, 50), 8)
             cv2.putText(canvas, tech_name, (tx, ty), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2)
+
+    def check_click(self, x, y):
+        """Dispara tutoriales interactivos mediante la region x, y."""
+        for rect, sk in self.clickable_regions:
+            x1, y1, w, h = rect
+            if x1 <= x <= x1+w and y1 <= y <= y1+h:
+                if self.active_tutorial == sk:
+                    self.active_tutorial = None
+                else:
+                    self.active_tutorial = sk
+                return True
+        self.active_tutorial = None
+        return False
+
+    def draw_tutorial_overlay(self, canvas):
+        if not self.active_tutorial: return
+        
+        cw, ch = self.W, self.H
+        
+        # Superposición oscura
+        self.draw_glass_panel(canvas, cw//2 - 400, ch//2 - 300, 800, 600, alpha=0.9, color=(10, 5, 20), border_color=(255, 50, 100))
+        
+        cv2.putText(canvas, f"TUTORIAL SENSOR: {self.active_tutorial.upper()}", (cw//2 - 350, ch//2 - 240), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+        cv2.putText(canvas, "Reproduce the blueprint geometry mapped below via MediaPipe.", 
+                    (cw//2 - 350, ch//2 - 200), cv2.FONT_HERSHEY_PLAIN, 1.2, (200, 200, 200), 1)
+
+        # Rejilla Escaner
+        cx, cy = cw//2, ch//2 + 50
+        cv2.circle(canvas, (cx, cy), 180, (50, 50, 100), 1, cv2.LINE_AA)
+        cv2.circle(canvas, (cx, cy), 100, (30, 150, 200), 1, cv2.LINE_AA)
+        
+        # Puntos Vectores (Mano Simulada Abstracta)
+        pts = [
+            (cx, cy+120), (cx-90, cy+20), (cx-50, cy-90), (cx, cy-120), (cx+50, cy-100), (cx+90, cy-40)
+        ]
+        
+        # Conexiones neón
+        for p in pts[1:]:
+            cv2.line(canvas, pts[0], p, (100, 255, 200), 2, cv2.LINE_AA)
+            
+        for px, py in pts:
+            cv2.circle(canvas, (px, py), 8, (255, 255, 255), -1, cv2.LINE_AA)
+            cv2.circle(canvas, (px, py), 15, (0, 200, 255), 1, cv2.LINE_AA)
+            
+        cv2.putText(canvas, "* REFER TO 'hand_seals_guide.md' FOR EXACT FINGER PHYSIOLOGY *", 
+                    (cx - 300, cy + 250), cv2.FONT_HERSHEY_PLAIN, 1.2, (100, 150, 255), 2)
