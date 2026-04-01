@@ -10,6 +10,7 @@ import time
 
 # Colores por personaje (BGR)
 CHARACTER_COLORS = {
+    "Gojo":     (255, 200, 100),  # Cian/azul brillante
     "Megumi":   (128, 0, 128),    # Morado
     "Nanami":   (0, 200, 255),    # Amarillo/dorado
     "Higuruma": (0, 215, 255),    # Dorado

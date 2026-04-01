@@ -13,6 +13,7 @@ from utils.math_helpers import get_centroid, get_single_hand_center
 from core.effects import EffectGenerator
 from core.gestures import detect_active_technique, TECHNIQUE_INFO
 from core.hud import CursedEnergySystem, draw_hud
+from core.physics import PhysicsParticleSystem
 
 
 class CursedVision:
@@ -42,6 +43,7 @@ class CursedVision:
         # Subsistemas
         self.effect_gen = EffectGenerator()
         self.energy = CursedEnergySystem(max_energy=100.0)
+        self.physics = PhysicsParticleSystem(max_particles=300)
 
         # Estado de carga universal
         self.charge_frames = 0
@@ -102,11 +104,29 @@ class CursedVision:
             cx, cy = get_centroid(hand_data["h1"], hand_data["h2"], fw, fh, offset_y=-60)
             self.effect_gen.draw_rika(frame, cx, cy, scale=120)
 
+        # --- GOJO ---
+        elif technique_id == "infinite_void":
+            cx, cy = get_single_hand_center(hand_data["hand"], fw, fh)
+            self.effect_gen.draw_infinite_void(frame, cx, cy, fw, fh)
+
+        elif technique_id == "blue":
+            cx, cy = get_single_hand_center(hand_data["hand"], fw, fh)
+            self.effect_gen.draw_blue_attraction(frame, cx, cy, self.physics, fw, fh)
+
+        elif technique_id == "red":
+            cx, cy = get_single_hand_center(hand_data["hand"], fw, fh)
+            self.effect_gen.draw_red_repulsion(frame, cx, cy, self.physics, fw, fh)
+
+        elif technique_id == "hollow_purple":
+            cx, cy = get_centroid(hand_data["h1"], hand_data["h2"], fw, fh, offset_y=0)
+            self.effect_gen.draw_hollow_purple(frame, cx, cy, self.physics, fw, fh)
+
     def run(self):
         """Bucle principal de captura y procesamiento en tiempo real."""
         print("🔮 Iniciando JujutsuPy Vision Engine...")
-        print("📜 Gestos disponibles: Divine Dogs, Nue, Orochi, Toad, Max Elephant,")
-        print("   Rabbit Escape, Mahoraga, Overtime, Ratio 7:3, Gavel Strike, Rika, Domain")
+        print("📜 16 Gestos: Gojo (Void/Blue/Red/Purple), Megumi (Dogs/Nue/Orochi/")
+        print("   Toad/Elephant/Rabbit/Mahoraga), Nanami (Overtime/Ratio),")
+        print("   Higuruma (Gavel), Yuta (Rika/Domain)")
         print("   Presiona 'q' en la ventana para salir.\n")
 
         prev_time = time.time()

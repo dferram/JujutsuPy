@@ -246,6 +246,84 @@ def detect_gavel_strike(h1, h2):
 
 
 # =============================================================================
+#  SATORU GOJO — Limitless / Six Eyes (4 técnicas)
+# =============================================================================
+
+def detect_infinite_void(hand):
+    """
+    Infinite Void (Domain Expansion): Dedo corazón cruzado sobre el índice.
+    Firma: Middle tip (12) cruza por encima del index tip (8) en eje X,
+    ambos extendidos, y los demás dedos cerrados.
+    """
+    fingers = get_extended_fingers(hand)
+
+    # Índice y medio extendidos, anular y meñique cerrados
+    if not (fingers[1] and fingers[2] and not fingers[3] and not fingers[4]):
+        return False
+
+    # El medio cruza sobre el índice (sus puntas X deben estar invertidas
+    # respecto a sus bases)
+    idx_tip = hand.landmark[8]
+    mid_tip = hand.landmark[12]
+    idx_mcp = hand.landmark[5]
+    mid_mcp = hand.landmark[9]
+
+    # En la mano derecha natural: mid.x > idx.x en la base.
+    # Si están cruzados: mid_tip.x < idx_tip.x (o viceversa según lateralidad)
+    base_diff = mid_mcp.x - idx_mcp.x
+    tip_diff = mid_tip.x - idx_tip.x
+
+    # Si el signo cambia, los dedos están cruzados
+    return (base_diff * tip_diff) < 0
+
+
+def detect_blue(hand):
+    """
+    Blue (Lapse): Mano abierta hacia la cámara (todos los dedos extendidos y separados).
+    Firma: 5 dedos extendidos + spread (distancia entre índice y meñique > 0.15).
+    """
+    fingers = get_extended_fingers(hand)
+    if sum(fingers) < 5:
+        return False
+
+    # Los dedos deben estar abiertos (spread)
+    idx = landmarks_to_point(hand, 8)
+    pinky = landmarks_to_point(hand, 20)
+    spread = calculate_euclidean_distance(idx, pinky)
+
+    return spread > 0.15
+
+
+def detect_red(hand):
+    """
+    Red (Reversal): Solo el índice apuntando hacia adelante.
+    Firma: Índice extendido, todos los demás cerrados.
+    """
+    fingers = get_extended_fingers(hand)
+    return fingers[1] and not fingers[0] and not fingers[2] and not fingers[3] and not fingers[4]
+
+
+def detect_hollow_purple(h1, h2):
+    """
+    Hollow Purple: Ambas manos unidas en pose de disparo (palmas juntas,
+    índices apuntando al frente como una pistola).
+    Firma: Palmas cercanas + ambos índices extendidos + demás dedos cerrados.
+    """
+    p1, p2 = landmarks_to_point(h1, 9), landmarks_to_point(h2, 9)
+    if calculate_euclidean_distance(p1, p2) > 0.15:
+        return False
+
+    f1 = get_extended_fingers(h1)
+    f2 = get_extended_fingers(h2)
+
+    # Ambos índices extendidos, medios/anulares/meñiques cerrados
+    gun1 = f1[1] and not f1[2] and not f1[3] and not f1[4]
+    gun2 = f2[1] and not f2[2] and not f2[3] and not f2[4]
+
+    return gun1 and gun2
+
+
+# =============================================================================
 #  YUTA OKKOTSU — Pure Love (2 técnicas)
 # =============================================================================
 
@@ -302,6 +380,12 @@ def detect_domain_yuta(h1, h2):
 
 # Mapeo: ID → (nombre_display, character)
 TECHNIQUE_INFO = {
+    # Gojo
+    "infinite_void":  ("DOMAIN: INFINITE VOID", "Gojo"),
+    "blue":           ("CURSED TECHNIQUE LAPSE: BLUE", "Gojo"),
+    "red":            ("CURSED TECHNIQUE REVERSAL: RED", "Gojo"),
+    "hollow_purple":  ("HOLLOW PURPLE: IMAGINARY TECHNIQUE", "Gojo"),
+    # Megumi
     "divine_dogs":    ("DIVINE DOGS: KEN", "Megumi"),
     "nue":            ("NUE: THUNDERBIRD", "Megumi"),
     "orochi":         ("GREAT SERPENT: OROCHI", "Megumi"),
@@ -309,9 +393,12 @@ TECHNIQUE_INFO = {
     "max_elephant":   ("MAX ELEPHANT", "Megumi"),
     "rabbit_escape":  ("RABBIT ESCAPE", "Megumi"),
     "mahoraga":       ("MAHORAGA: EIGHT-HANDLED SWORD", "Megumi"),
+    # Nanami
     "overtime":       ("OVERTIME MODE", "Nanami"),
     "ratio":          ("RATIO TECHNIQUE: 7:3", "Nanami"),
+    # Higuruma
     "gavel_strike":   ("GAVEL STRIKE: DEADLY SENTENCING", "Higuruma"),
+    # Yuta
     "rika":           ("RIKA: MANIFESTATION", "Yuta"),
     "domain_yuta":    ("DOMAIN: AUTHENTIC MUTUAL LOVE", "Yuta"),
 }
@@ -333,6 +420,10 @@ def detect_active_technique(hands_list, handedness_list=None):
 
     if num_hands == 2:
         h1, h2 = hands_list[0], hands_list[1]
+
+        # --- Gojo: Técnicas de 2 manos (máxima prioridad) ---
+        if detect_hollow_purple(h1, h2):
+            return "hollow_purple", {"h1": h1, "h2": h2}
 
         # --- Técnicas de 2 manos (orden de prioridad) ---
         if detect_mahoraga(h1, h2):
@@ -360,6 +451,14 @@ def detect_active_technique(hands_list, handedness_list=None):
             return "divine_dogs", {"h1": h1, "h2": h2}
 
     if num_hands >= 1:
+        # --- Gojo: Técnicas de 1 mano (alta prioridad) ---
+        for hand in hands_list:
+            if detect_infinite_void(hand):
+                return "infinite_void", {"hand": hand}
+
+            if detect_red(hand):
+                return "red", {"hand": hand}
+
         # --- Técnicas de 1 mano (evaluar cada mano) ---
         for hand in hands_list:
             if detect_rika(hand):
@@ -373,5 +472,10 @@ def detect_active_technique(hands_list, handedness_list=None):
 
             if detect_orochi(hand):
                 return "orochi", {"hand": hand}
+
+        # Blue (open palm) - lowest priority since it conflicts with many gestures
+        for hand in hands_list:
+            if detect_blue(hand):
+                return "blue", {"hand": hand}
 
     return None, None

@@ -26,6 +26,8 @@ class EffectGenerator:
         self._rabbit_particles = [(random.random(), random.random()) for _ in range(200)]
         self._sword_particles = [(random.uniform(0.1, 0.9), random.uniform(-0.3, 0.0)) for _ in range(40)]
         self._gavel_flash = 0
+        self._void_angle = 0.0
+        self._purple_trail = []  # Estela de Hollow Purple
 
     # =========================================================================
     #  GENERADORES DE SILUETAS (Coordenadas matemáticas relativas)
@@ -339,3 +341,146 @@ class EffectGenerator:
                 cv2.circle(frame, (px, py), 3, (255, 255, 255), -1)
                 if random.random() < 0.1:
                     cv2.circle(frame, (px, py), 6, (220, 220, 255), 1)
+
+    # =========================================================================
+    #  SATORU GOJO — Limitless
+    # =========================================================================
+
+    def draw_infinite_void(self, frame, cx, cy, fw, fh, scale=120):
+        """
+        Infinite Void: Portal elíptico cian/blanco con anillos giratorios
+        y 'estrellas' de datos simulando el vacío infinito.
+        """
+        self._void_angle += 0.03
+
+        # Oscurecer ligeramente el fondo para efecto de dominio
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (0, 0), (fw, fh), (10, 5, 15), -1)
+        cv2.addWeighted(overlay, 0.3, frame, 0.7, 0, frame)
+
+        # Anillos concéntricos giratorios
+        for ring in range(3):
+            r = int(scale * (0.5 + ring * 0.4))
+            pts = 60
+            for i in range(pts):
+                angle = (i / pts) * 2 * math.pi + self._void_angle * (ring + 1)
+                x = int(cx + math.cos(angle) * r)
+                y = int(cy + math.sin(angle) * r * 0.6)  # Elíptico
+
+                if 0 <= x < fw and 0 <= y < fh:
+                    brightness = int(150 + 105 * math.sin(angle * 3 + self._void_angle * 5))
+                    color = (brightness, brightness, 255)  # Cian/blanco
+                    cv2.circle(frame, (x, y), 2, color, -1)
+
+        # Estrellas de datos (puntos aleatorios brillantes)
+        for _ in range(30):
+            angle = random.uniform(0, 2 * math.pi)
+            r = random.uniform(10, scale * 1.5)
+            x = int(cx + math.cos(angle) * r)
+            y = int(cy + math.sin(angle) * r * 0.6)
+            if 0 <= x < fw and 0 <= y < fh:
+                if random.random() < 0.5:
+                    cv2.circle(frame, (x, y), 1, (255, 255, 255), -1)
+                else:
+                    cv2.circle(frame, (x, y), 1, (200, 200, 50), -1)
+
+        # Centro brillante pulsante
+        pulse = int(15 + 8 * math.sin(time.time() * 4))
+        cv2.circle(frame, (cx, cy), pulse, (255, 255, 255), 2)
+        cv2.circle(frame, (cx, cy), pulse + 5, (200, 200, 50), 1)
+
+    def draw_blue_attraction(self, frame, cx, cy, physics_system, fw, fh):
+        """
+        Blue (Lapse): Punto de gravedad azul que succiona partículas.
+        Usa el PhysicsParticleSystem para simulación vectorial real.
+        """
+        # Spawn partículas ambientales si hacen falta
+        physics_system.spawn_ambient(fw, fh, count=8, color=(255, 150, 50))
+
+        # Aplicar fuerza centrípeta (atracción)
+        physics_system.apply_attraction(cx, cy, strength=3.0)
+        physics_system.update(damping=0.92)
+        physics_system.render(frame, base_size=2)
+
+        # Núcleo azul brillante
+        pulse = int(12 + 6 * math.sin(time.time() * 6))
+        cv2.circle(frame, (cx, cy), pulse, (255, 100, 0), -1)     # Azul denso
+        cv2.circle(frame, (cx, cy), pulse + 8, (255, 180, 50), 2) # Halo azul
+        cv2.circle(frame, (cx, cy), pulse + 16, (255, 200, 100), 1)
+
+    def draw_red_repulsion(self, frame, cx, cy, physics_system, fw, fh):
+        """
+        Red (Reversal): Onda de choque roja que empuja partículas hacia los bordes.
+        Invierte la polaridad del campo vectorial.
+        """
+        # Spawn partículas desde el centro
+        for _ in range(5):
+            if len(physics_system.particles) < physics_system.max_particles:
+                from core.physics import Particle
+                p = Particle(
+                    x=cx + random.randint(-20, 20),
+                    y=cy + random.randint(-20, 20),
+                    life=random.randint(40, 100),
+                    color=(50, 50, 255)  # Rojo en BGR
+                )
+                physics_system.particles.append(p)
+
+        # Aplicar fuerza centrífuga (repulsión)
+        physics_system.apply_repulsion(cx, cy, strength=4.0)
+        physics_system.update(damping=0.96)
+        physics_system.render(frame, base_size=3)
+
+        # Ondas de choque expansivas
+        t = time.time()
+        for wave in range(3):
+            r = int((((t * 2 + wave) % 1.0) * 200))
+            alpha = max(0, 1.0 - r / 200)
+            color = (0, int(50 * alpha), int(255 * alpha))
+            cv2.circle(frame, (cx, cy), r, color, 1)
+
+        # Núcleo rojo
+        cv2.circle(frame, (cx, cy), 8, (0, 0, 255), -1)
+        cv2.circle(frame, (cx, cy), 14, (0, 80, 255), 2)
+
+    def draw_hollow_purple(self, frame, cx, cy, physics_system, fw, fh):
+        """
+        Hollow Purple: Fusión de Blue + Red. Esfera morada eléctrica
+        con estela de 'borrado de píxeles'.
+        """
+        # Mantener la estela (últimas N posiciones del centro)
+        self._purple_trail.append((cx, cy))
+        if len(self._purple_trail) > 30:
+            self._purple_trail.pop(0)
+
+        # Dibujar estela de borrado (píxeles negros erosionados)
+        for i, (tx, ty) in enumerate(self._purple_trail):
+            alpha = i / len(self._purple_trail)
+            r = int(20 * (1.0 - alpha))
+            if 0 <= tx < fw and 0 <= ty < fh:
+                cv2.circle(frame, (tx, ty), r, (10, 0, 10), -1)  # "Borrado"
+
+        # Partículas rojas y azules fusionándose
+        for _ in range(15):
+            angle = random.uniform(0, 2 * math.pi)
+            r = random.uniform(20, 60)
+            px = int(cx + math.cos(angle) * r)
+            py = int(cy + math.sin(angle) * r)
+            if 0 <= px < fw and 0 <= py < fh:
+                if random.random() < 0.5:
+                    cv2.circle(frame, (px, py), 2, (255, 80, 30), -1)   # Azul
+                else:
+                    cv2.circle(frame, (px, py), 2, (50, 30, 255), -1)   # Rojo
+
+        # Esfera púrpura central (eléctrica y pulsante)
+        pulse = int(18 + 8 * math.sin(time.time() * 10))
+        cv2.circle(frame, (cx, cy), pulse, (200, 0, 200), -1)
+        cv2.circle(frame, (cx, cy), pulse + 5, (255, 50, 255), 2)
+        cv2.circle(frame, (cx, cy), pulse + 12, (220, 100, 255), 1)
+
+        # Chispas eléctricas
+        for _ in range(6):
+            x1 = cx + random.randint(-pulse, pulse)
+            y1 = cy + random.randint(-pulse, pulse)
+            x2 = x1 + random.randint(-20, 20)
+            y2 = y1 + random.randint(-20, 20)
+            cv2.line(frame, (x1, y1), (x2, y2), (255, 150, 255), 1)
